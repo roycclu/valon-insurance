@@ -222,6 +222,18 @@ h4 {
   gap: 16px;
 }
 
+.layout.agent-mode {
+  grid-template-columns: 1fr;
+}
+
+.layout.without-integrations {
+  grid-template-columns: 320px minmax(0, 1fr);
+}
+
+.layout.without-integrations {
+  grid-template-columns: 320px minmax(0, 1fr);
+}
+
 .claim-list-panel,
 .screen-panel,
 .integration-panel {
@@ -495,6 +507,10 @@ h4 {
   margin-bottom: 14px;
 }
 
+.detail-section + .detail-section {
+  margin-top: 18px;
+}
+
 .form-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -688,6 +704,16 @@ h4 {
   min-width: 140px;
 }
 
+.secondary-button {
+  border: 1px solid var(--amber);
+  background: #FBF2E0;
+  color: #7B5A18;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
 .empty-state {
   color: var(--text-dim);
 }
@@ -761,6 +787,142 @@ h4 {
 .chat-form {
   display: grid;
   gap: 10px;
+}
+
+.agent-screen {
+  padding: 0;
+  overflow: hidden;
+}
+
+.agent-layout {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr) 300px;
+  min-height: 780px;
+}
+
+.agent-sidebar,
+.agent-activity-panel,
+.agent-chat-shell {
+  padding: 18px;
+}
+
+.agent-sidebar,
+.agent-activity-panel {
+  background: #fcfaf6;
+}
+
+.agent-sidebar {
+  border-right: 1px solid var(--line);
+}
+
+.agent-activity-panel {
+  border-left: 1px solid var(--line);
+}
+
+.agent-stack,
+.activity-feed,
+.timeline-list,
+.agent-queue-list {
+  display: grid;
+  gap: 14px;
+}
+
+.context-toggle {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: #f5f0e8;
+  color: #1a1a1a;
+  padding: 12px 14px;
+  text-align: left;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-bottom: 12px;
+}
+
+.context-panel {
+  border: 1px solid var(--line);
+  background: #ffffff;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.context-row {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.context-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.context-row span,
+.activity-item span,
+.activity-item small,
+.timeline-item span {
+  color: var(--text-dim);
+}
+
+.agent-chat-panel {
+  border: 1px solid var(--line);
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+  min-height: 620px;
+}
+
+.agent-chat-history {
+  display: grid;
+  gap: 12px;
+  max-height: 520px;
+  overflow: auto;
+}
+
+.activity-item,
+.timeline-item {
+  border: 1px solid var(--line);
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.activity-item p,
+.timeline-item p,
+.detail-section p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.activity-item small {
+  font-size: 12px;
+}
+
+.compact-task-list .task-row {
+  align-items: flex-start;
+}
+
+.task-row.compact {
+  display: grid;
+  gap: 10px;
+}
+
+.timeline-list {
+  margin-top: 4px;
+}
+
+.resolution-inline {
+  justify-content: flex-start;
+  gap: 12px;
 }
 
 .config-overlay {
@@ -883,8 +1045,14 @@ h4 {
   .detail-grid,
   .finance-grid,
   .finance-summary-grid,
-  .config-grid {
+  .config-grid,
+  .agent-layout {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .agent-chat-shell {
+    grid-column: 1 / -1;
+    order: 3;
   }
 }
 
@@ -911,7 +1079,8 @@ h4 {
   .form-grid,
   .finance-grid,
   .finance-summary-grid,
-  .config-grid {
+  .config-grid,
+  .agent-layout {
     grid-template-columns: 1fr;
   }
 
@@ -923,5 +1092,11 @@ h4 {
 
   .config-drawer {
     width: 100vw;
+  }
+
+  .agent-sidebar,
+  .agent-chat-shell,
+  .agent-activity-panel {
+    padding: 14px;
   }
 }

@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 
-const CLAIMS_STORAGE_KEY = "valon-claims-data-v3";
-const TASKS_STORAGE_KEY = "valon-claims-tasks-v1";
-const CHAT_STORAGE_KEY = "valon-claims-chat-v1";
+const CLAIMS_STORAGE_KEY = "valon-claims-data-v4";
+const TASKS_STORAGE_KEY = "valon-claims-tasks-v2";
+const CHAT_STORAGE_KEY = "valon-claims-chat-v2";
 const CHAT_CONFIG_STORAGE_KEY = "valon-claims-chat-config-v1";
+const AGENT_FEED_STORAGE_KEY = "valon-agent-feed-v1";
+
 const MODEL_OPTIONS = {
   anthropic: ["claude-sonnet-4-6", "claude-opus-4-6", "claude-haiku-4-5"],
   openai: ["gpt-5", "gpt-4o", "gpt-4o-mini"],
   google: ["gemini-2.5-pro", "gemini-2.5-flash"],
 };
+
 const MODEL_DEFAULTS = Object.fromEntries(
   Object.entries(MODEL_OPTIONS).map(([provider, models]) => [provider, models[0]]),
 );
@@ -20,21 +23,6 @@ const STAGES = [
   { id: "coverage", label: "Coverage Check" },
   { id: "resolution", label: "Resolution" },
 ];
-
-const TASK_TEMPLATES = {
-  triage: {
-    dueDays: 1,
-    items: ["Review incident report", "Assign priority score"],
-  },
-  documents: {
-    dueDays: 2,
-    items: ["Chase missing police report", "Verify repair estimate"],
-  },
-  coverage: {
-    dueDays: 1,
-    items: ["Check policy exclusions", "Confirm coverage determination"],
-  },
-};
 
 const INTEGRATIONS = [
   { name: "Policy Admin System", status: "connected", lastChecked: "May 07, 2026 09:12 UTC" },
@@ -81,95 +69,244 @@ const POLICY_DETAILS = {
     incidentType: "Collision",
     covered: true,
     exclusions: ["Racing events", "Commercial delivery use"],
-    determination: "Approved for collision loss subject to deductible.",
+    determination: "Approved for collision loss subject to deductible after shop estimate review.",
   },
-  "MC-557903": {
-    policyType: "Urban Rider Select",
+  "MC-198341": {
+    policyType: "Metro Rider Elite",
     incidentType: "Single Vehicle",
     covered: true,
-    exclusions: ["Track days", "Intentional damage"],
-    determination: "Covered loss with injury review and medical coordination required.",
+    exclusions: ["Track use", "Intentional damage", "Mechanical breakdown"],
+    determination: "Coverage appears available, but bodily injury and municipal liability issues require manual review.",
   },
-  "MC-998401": {
-    policyType: "Essential Liability",
-    incidentType: "Theft",
+  "MC-201567": {
+    policyType: "Borough Rider Preferred",
+    incidentType: "Collision",
+    covered: true,
+    exclusions: ["Commercial courier use", "Racing events"],
+    determination: "Approved collision loss after deductible. Settlement package is ready for signature.",
+  },
+  "BT-334821": {
+    policyType: "HarborCraft Comprehensive",
+    incidentType: "Docking Collision",
+    covered: true,
+    exclusions: ["Racing events", "Intentional grounding"],
+    determination: "Covered docking loss. Marina report and marine estimate still required before final payment authority.",
+  },
+  "BT-298043": {
+    policyType: "Coastal Essentials",
+    incidentType: "Mechanical Failure",
     covered: false,
-    exclusions: ["Unsecured vehicle theft", "Off-road usage"],
-    determination: "Theft loss is not covered under this form.",
+    exclusions: ["Mechanical breakdown", "Wear and tear", "Gradual deterioration"],
+    determination: "Coverage remains under review pending surveyor findings on sudden failure versus gradual deterioration.",
   },
-};
-
-const DOCUMENT_LIBRARY = {
-  low: ["Accident Photos", "Police Report"],
-  medium: ["Accident Photos", "Police Report", "Repair Estimate"],
-  high: ["Accident Photos", "Police Report", "Repair Estimate", "Medical Records", "Legal Notice"],
 };
 
 const SAMPLE_CLAIMS = [
   {
     claimId: "CLM-260501",
     policyNumber: "MC-204812",
-    claimantName: "Darius Cole",
-    incidentDate: "2026-05-02",
-    incidentDescription: "Rear-end collision at a stoplight with fairing and fork damage.",
+    claimantName: "Marcus Rivera",
+    claimantAge: 34,
+    claimantLocation: "Brooklyn, NY",
+    incidentDate: "2026-05-03",
+    incidentDescription:
+      "Rear-ended at low speed by a sedan on the BQE near the Atlantic Ave on-ramp. Minor damage to the rear fender and exhaust. No injury reported at scene or after follow-up.",
     injuryInvolved: false,
     damageSeverity: "minor",
-    vehicleMake: "Yamaha",
-    vehicleModel: "MT-07",
+    vehicleMake: "Harley-Davidson",
+    vehicleModel: "Sportster",
     vehicleYear: "2023",
-    stage: "triage",
+    assetType: "Motorcycle",
+    stage: "documents",
     priority: "low",
-    documents: ["Accident Photos"],
-    coverageStatus: "pending",
-    adjusterAssigned: "A. Mercer",
-    estimatedPayout: 2200,
-    createdAt: "2026-05-02T14:16:00Z",
-    updatedAt: "2026-05-02T15:02:00Z",
-    notes: "No bodily injury reported. Photos uploaded from tow yard.",
+    requiredDocuments: ["Accident Photos", "Police Report", "Repair Estimate"],
+    documentChecklist: [
+      { name: "Accident Photos", status: "received", notes: "Uploaded from claimant phone on May 3." },
+      { name: "Police Report", status: "received", notes: "NYPD MV-104 received May 4." },
+      { name: "Repair Estimate", status: "pending", notes: "Waiting on Brooklyn shop estimate due May 9." },
+    ],
+    coverageStatus: "approved",
+    coverageReason:
+      "Rear-end collision is a covered loss under RoadShield Plus. No exclusion triggered. Final payment is waiting only on the repair estimate.",
+    adjusterAssigned: "Sarah Chen",
+    estimatedPayout: 2400,
+    payoutLabel: "$2,400",
+    createdAt: "2026-05-03T15:10:00Z",
+    updatedAt: "2026-05-07T13:10:00Z",
+    issue: "Missing repair estimate from shop.",
+    notes: "Claimant cooperative. Shop estimate expected by May 9.",
+    timeline: [
+      { timestamp: "2026-05-03T15:10:00Z", title: "FNOL recorded", detail: "Call center logged low-speed rear-end loss and created file." },
+      { timestamp: "2026-05-04T09:30:00Z", title: "Police report received", detail: "NYPD report attached to file." },
+      { timestamp: "2026-05-07T13:10:00Z", title: "Estimate follow-up issued", detail: "Adjuster requested certified shop estimate to finalize payment." },
+    ],
     closed: false,
   },
   {
     claimId: "CLM-260502",
-    policyNumber: "MC-557903",
+    policyNumber: "MC-198341",
     claimantName: "Elena Park",
+    claimantAge: 28,
+    claimantLocation: "Astoria, Queens, NY",
     incidentDate: "2026-05-03",
-    incidentDescription: "Low-side crash on rain-slick city street with rider wrist injury.",
+    incidentDescription:
+      "Single-vehicle loss on Queens Blvd near 71st Ave after claimant struck a pothole and lost control. Significant front fork damage to the bike and minor road rash on the left arm. Claim now includes potential medical exposure and city-liability questions.",
     injuryInvolved: true,
     damageSeverity: "severe",
-    vehicleMake: "Ducati",
-    vehicleModel: "Monster",
-    vehicleYear: "2024",
-    stage: "documents",
+    vehicleMake: "Honda",
+    vehicleModel: "CBR600RR",
+    vehicleYear: "2021",
+    assetType: "Motorcycle",
+    stage: "coverage",
     priority: "high",
-    documents: ["Accident Photos", "Police Report", "Medical Records"],
+    requiredDocuments: ["Accident Photos", "Police Report", "Medical Records", "Legal Notice", "Repair Estimate"],
+    documentChecklist: [
+      { name: "Accident Photos", status: "received", notes: "Scene photos uploaded May 3." },
+      { name: "Police Report", status: "pending", notes: "Still missing after 4 days. Claimant attorney notified." },
+      { name: "Medical Records", status: "received", notes: "Urgent care discharge notes received May 5." },
+      { name: "Legal Notice", status: "received", notes: "PI attorney notice received May 6." },
+      { name: "Repair Estimate", status: "pending", notes: "Front-end damage estimate still outstanding from Queens shop." },
+    ],
     coverageStatus: "pending",
-    adjusterAssigned: "P. Shah",
-    estimatedPayout: 11800,
-    createdAt: "2026-05-03T09:44:00Z",
-    updatedAt: "2026-05-03T10:11:00Z",
-    notes: "Escalated due to injury exposure and likely total loss review.",
+    coverageReason:
+      "Policy appears to cover single-vehicle collision, but bodily injury, attorney involvement, and possible municipal liability require manual adjudication before coverage is confirmed.",
+    adjusterAssigned: "James Okafor",
+    estimatedPayout: null,
+    payoutLabel: "TBD pending medical assessment",
+    createdAt: "2026-05-03T19:25:00Z",
+    updatedAt: "2026-05-07T11:20:00Z",
+    issue: "Injury involved, possible medical claim, and pothole may implicate city liability.",
+    notes: "Claimant has retained personal injury attorney. Legal notice received May 6.",
+    timeline: [
+      { timestamp: "2026-05-03T19:25:00Z", title: "FNOL recorded", detail: "High-severity single-vehicle loss opened from claimant call." },
+      { timestamp: "2026-05-04T08:45:00Z", title: "High-priority triage", detail: "Bodily injury and severe fork damage routed to James Okafor." },
+      { timestamp: "2026-05-06T16:40:00Z", title: "Legal notice attached", detail: "Attorney representation letter uploaded to claim." },
+      { timestamp: "2026-05-07T11:20:00Z", title: "Coverage hold", detail: "Adjuster flagged possible city subrogation angle and held decision pending records." },
+    ],
     closed: false,
   },
   {
     claimId: "CLM-260503",
-    policyNumber: "MC-998401",
-    claimantName: "Miles Bennett",
-    incidentDate: "2026-05-05",
-    incidentDescription: "Motorcycle reported stolen from open driveway overnight.",
+    policyNumber: "MC-201567",
+    claimantName: "Thomas Nguyen",
+    claimantAge: 41,
+    claimantLocation: "Staten Island, NY",
+    incidentDate: "2026-04-28",
+    incidentDescription:
+      "Minor collision with a delivery vehicle at Richmond Ave intersection while both vehicles were moving slowly. Moderate damage to the left fairing and mirror. No injury reported.",
     injuryInvolved: false,
     damageSeverity: "moderate",
-    vehicleMake: "Honda",
-    vehicleModel: "CB500X",
-    vehicleYear: "2022",
-    stage: "coverage",
+    vehicleMake: "Kawasaki",
+    vehicleModel: "Ninja 650",
+    vehicleYear: "2020",
+    assetType: "Motorcycle",
+    stage: "resolution",
     priority: "medium",
-    documents: ["Accident Photos", "Police Report", "Repair Estimate"],
-    coverageStatus: "denied",
-    adjusterAssigned: "M. Hale",
-    estimatedPayout: 0,
-    createdAt: "2026-05-05T21:05:00Z",
-    updatedAt: "2026-05-05T22:08:00Z",
-    notes: "Coverage concern due to policy form and driveway storage facts.",
+    requiredDocuments: ["Accident Photos", "Police Report", "Repair Estimate", "Settlement Agreement"],
+    documentChecklist: [
+      { name: "Accident Photos", status: "received", notes: "Uploaded at FNOL." },
+      { name: "Police Report", status: "received", notes: "Precinct report confirmed low-speed intersection collision." },
+      { name: "Repair Estimate", status: "received", notes: "Certified St. George shop estimate for $4,800." },
+      { name: "Settlement Agreement", status: "pending", notes: "Awaiting claimant signature before close." },
+    ],
+    coverageStatus: "approved",
+    coverageReason:
+      "Collision loss is covered under Borough Rider Preferred. All underwriting checks cleared. Net settlement is ready after deductible.",
+    adjusterAssigned: "Sarah Chen",
+    estimatedPayout: 4200,
+    payoutLabel: "$4,200 after deductible",
+    createdAt: "2026-04-28T14:05:00Z",
+    updatedAt: "2026-05-07T15:30:00Z",
+    issue: "Awaiting claimant signature on settlement agreement.",
+    notes: "Ready to close. Awaiting claimant signature on settlement agreement.",
+    timeline: [
+      { timestamp: "2026-04-28T14:05:00Z", title: "FNOL recorded", detail: "Collision with delivery vehicle opened by claimant." },
+      { timestamp: "2026-05-01T10:25:00Z", title: "Repair estimate verified", detail: "Certified shop estimate validated at $4,800." },
+      { timestamp: "2026-05-05T17:00:00Z", title: "Coverage approved", detail: "Deductible applied and settlement package drafted." },
+      { timestamp: "2026-05-07T15:30:00Z", title: "Settlement sent", detail: "Awaiting claimant e-signature to close file." },
+    ],
+    closed: false,
+  },
+  {
+    claimId: "CLM-260504",
+    policyNumber: "BT-334821",
+    claimantName: "Dominique Osei",
+    claimantAge: 52,
+    claimantLocation: "Harlem, NY",
+    incidentDate: "2026-05-01",
+    incidentDescription:
+      "Collision with dock during docking maneuver on the Hudson River near the 79th St Boat Basin in high wind. Significant bow damage to the vessel. No injury reported.",
+    injuryInvolved: false,
+    damageSeverity: "moderate",
+    vehicleMake: "Sea-Doo",
+    vehicleModel: "Spark 3up",
+    vehicleYear: "2022",
+    assetType: "Boating",
+    stage: "documents",
+    priority: "medium",
+    requiredDocuments: ["Incident Photos", "Marina Incident Report", "Marine Repair Estimate", "Weather Data Pull"],
+    documentChecklist: [
+      { name: "Incident Photos", status: "received", notes: "Dockside photos uploaded May 1." },
+      { name: "Marina Incident Report", status: "pending", notes: "Boat Basin manager promised report by end of day." },
+      { name: "Marine Repair Estimate", status: "pending", notes: "Certified marine shop estimate outstanding." },
+      { name: "Weather Data Pull", status: "received", notes: "22 mph gusts recorded at time of incident." },
+    ],
+    coverageStatus: "approved",
+    coverageReason:
+      "Docking collision is covered under HarborCraft Comprehensive. Weather corroborates claimant account. Payment authority is waiting on marina and repair documentation.",
+    adjusterAssigned: "James Okafor",
+    estimatedPayout: 6500,
+    payoutLabel: "~$6,500",
+    createdAt: "2026-05-01T18:20:00Z",
+    updatedAt: "2026-05-07T10:05:00Z",
+    issue: "Missing marina incident report and certified marine repair estimate.",
+    notes: "Weather data pulled. 22 mph gusts recorded at time of incident and support claimant account.",
+    timeline: [
+      { timestamp: "2026-05-01T18:20:00Z", title: "Marine FNOL recorded", detail: "Docking collision logged with claimant narrative and dock photos." },
+      { timestamp: "2026-05-02T09:10:00Z", title: "Weather data attached", detail: "Observed gusts support loss account." },
+      { timestamp: "2026-05-07T10:05:00Z", title: "Document chase opened", detail: "Adjuster requested marina report and certified estimate." },
+    ],
+    closed: false,
+  },
+  {
+    claimId: "CLM-260505",
+    policyNumber: "BT-298043",
+    claimantName: "Rachel Steinberg",
+    claimantAge: 31,
+    claimantLocation: "Upper West Side, NY",
+    incidentDate: "2026-04-25",
+    incidentDescription:
+      "Engine failure on Long Island Sound off City Island resulted in Coast Guard assisted tow. No collision and no injury. Repair path likely requires full engine replacement.",
+    injuryInvolved: false,
+    damageSeverity: "minor",
+    vehicleMake: "Boston Whaler",
+    vehicleModel: "150 Montauk",
+    vehicleYear: "2019",
+    assetType: "Boating",
+    stage: "coverage",
+    priority: "low",
+    requiredDocuments: ["Tow Record", "Maintenance Records", "Marine Surveyor Inspection", "Repair Estimate"],
+    documentChecklist: [
+      { name: "Tow Record", status: "received", notes: "Coast Guard assistance log uploaded." },
+      { name: "Maintenance Records", status: "received", notes: "Service invoices attached for prior 18 months." },
+      { name: "Marine Surveyor Inspection", status: "pending", notes: "Inspection scheduled for May 10." },
+      { name: "Repair Estimate", status: "received", notes: "Engine replacement estimate received from marine service center." },
+    ],
+    coverageStatus: "pending",
+    coverageReason:
+      "Mechanical breakdown exclusion may apply. Coverage decision depends on whether surveyor concludes the failure was sudden and accidental or gradual deterioration.",
+    adjusterAssigned: "Sarah Chen",
+    estimatedPayout: null,
+    payoutLabel: "TBD",
+    createdAt: "2026-04-25T13:15:00Z",
+    updatedAt: "2026-05-07T09:40:00Z",
+    issue: "Mechanical breakdown exclusion review pending surveyor findings.",
+    notes: "Marine surveyor inspection scheduled May 10. Outcome will determine coverage disposition.",
+    timeline: [
+      { timestamp: "2026-04-25T13:15:00Z", title: "FNOL recorded", detail: "Tow event opened as potential sudden engine failure." },
+      { timestamp: "2026-04-29T12:05:00Z", title: "Repair estimate attached", detail: "Marine center quoted full engine replacement." },
+      { timestamp: "2026-05-07T09:40:00Z", title: "Coverage review held", detail: "Surveyor inspection scheduled to distinguish accidental failure from wear and tear." },
+    ],
     closed: false,
   },
 ];
@@ -178,6 +315,8 @@ const NEW_CLAIM_TEMPLATE = {
   claimId: "",
   policyNumber: "MC-204812",
   claimantName: "",
+  claimantAge: 0,
+  claimantLocation: "",
   incidentDate: "",
   incidentDescription: "",
   injuryInvolved: false,
@@ -185,19 +324,39 @@ const NEW_CLAIM_TEMPLATE = {
   vehicleMake: "",
   vehicleModel: "",
   vehicleYear: "",
+  assetType: "Motorcycle",
   stage: "fnol",
   priority: "low",
-  documents: [],
+  requiredDocuments: ["Accident Photos", "Police Report"],
+  documentChecklist: [
+    { name: "Accident Photos", status: "pending", notes: "" },
+    { name: "Police Report", status: "pending", notes: "" },
+  ],
   coverageStatus: "pending",
+  coverageReason: "Coverage has not been reviewed yet.",
   adjusterAssigned: "Unassigned",
   estimatedPayout: 0,
+  payoutLabel: "$0",
   createdAt: "",
   updatedAt: "",
+  issue: "",
   notes: "",
+  timeline: [],
   closed: false,
 };
 
 function derivePriority(claim) {
+  if (claim.priority) {
+    return {
+      priority: claim.priority,
+      reasoning:
+        claim.priority === "high"
+          ? "High-priority handling due to injury exposure, severity, or legal complexity."
+          : claim.priority === "medium"
+            ? "Medium-priority handling due to repair coordination and moderate exposure."
+            : "Low-priority handling due to straightforward facts and limited exposure.",
+    };
+  }
   if (claim.injuryInvolved) {
     return {
       priority: "high",
@@ -207,23 +366,30 @@ function derivePriority(claim) {
   if (claim.damageSeverity === "severe") {
     return {
       priority: "high",
-      reasoning: "Severe motorcycle damage suggests material indemnity exposure and expedited review.",
+      reasoning: "Severe damage suggests material indemnity exposure and expedited review.",
     };
   }
   if (claim.damageSeverity === "moderate") {
     return {
       priority: "medium",
-      reasoning: "Moderate damage requires repair network coordination and a standard adjuster queue.",
+      reasoning: "Moderate damage requires repair coordination and standard adjuster handling.",
     };
   }
   return {
     priority: "low",
-    reasoning: "Minor damage with no injury fits streamlined straight-through processing.",
+    reasoning: "Minor damage with no injury fits streamlined handling.",
   };
 }
 
 function deriveCoverage(claim) {
   const policy = POLICY_DETAILS[claim.policyNumber] ?? POLICY_DETAILS["MC-204812"];
+  if (claim.coverageStatus || claim.coverageReason) {
+    return {
+      status: claim.coverageStatus ?? "pending",
+      reason: claim.coverageReason ?? policy.determination,
+      policy,
+    };
+  }
   if (!policy.covered) {
     return {
       status: "denied",
@@ -243,10 +409,6 @@ function deriveCoverage(claim) {
     reason: "Policy coverage aligns with reported incident and no hard exclusion is triggered.",
     policy,
   };
-}
-
-function getRequiredDocuments(priority) {
-  return DOCUMENT_LIBRARY[priority] ?? DOCUMENT_LIBRARY.low;
 }
 
 function stageIndex(stage) {
@@ -313,23 +475,38 @@ function statusLabel(value) {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
+function capitalize(value) {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
 function buildClaim(input, existing = {}) {
   const now = new Date().toISOString();
-  const triage = derivePriority(input);
-  const coverage = deriveCoverage({ ...input, priority: triage.priority });
+  const triage = derivePriority({ ...existing, ...input });
+  const coverage = deriveCoverage({ ...existing, ...input, priority: input.priority ?? existing.priority ?? triage.priority });
+  const requiredDocuments = input.requiredDocuments ?? existing.requiredDocuments ?? ["Accident Photos", "Police Report"];
+  const documentChecklist =
+    input.documentChecklist ??
+    existing.documentChecklist ??
+    requiredDocuments.map((name) => ({ name, status: "pending", notes: "" }));
+
   return {
     ...existing,
     ...input,
-    priority: triage.priority,
-    coverageStatus: coverage.status,
-    updatedAt: now,
-    createdAt: existing.createdAt || now,
-    claimId: existing.claimId || `CLM-${Math.floor(100000 + Math.random() * 900000)}`,
-    adjusterAssigned:
-      existing.adjusterAssigned ||
-      (triage.priority === "high" ? "P. Shah" : triage.priority === "medium" ? "M. Hale" : "A. Mercer"),
-    documents: existing.documents || [],
-    closed: existing.closed || false,
+    priority: input.priority ?? existing.priority ?? triage.priority,
+    coverageStatus: input.coverageStatus ?? existing.coverageStatus ?? coverage.status,
+    coverageReason: input.coverageReason ?? existing.coverageReason ?? coverage.reason,
+    requiredDocuments,
+    documentChecklist,
+    updatedAt: input.updatedAt ?? now,
+    createdAt: existing.createdAt || input.createdAt || now,
+    claimId: existing.claimId || input.claimId || `CLM-${Math.floor(100000 + Math.random() * 900000)}`,
+    adjusterAssigned: input.adjusterAssigned ?? existing.adjusterAssigned ?? "Unassigned",
+    payoutLabel:
+      input.payoutLabel ??
+      existing.payoutLabel ??
+      (typeof input.estimatedPayout === "number" ? formatCurrency(input.estimatedPayout) : "TBD"),
+    timeline: input.timeline ?? existing.timeline ?? [],
+    closed: input.closed ?? existing.closed ?? false,
   };
 }
 
@@ -409,25 +586,90 @@ function buildTaskId(claim, title) {
   return `${claim.claimId}:${claim.stage}:${title}`;
 }
 
+function documentStatusMissingCount(claim) {
+  return claim.documentChecklist.filter((item) => item.status !== "received").length;
+}
+
+function daysSince(timestamp) {
+  const milliseconds = Date.now() - new Date(timestamp).getTime();
+  return Math.max(0, Math.round(milliseconds / 86400000));
+}
+
+function buildAgentPrompt(task, claim) {
+  const delayDays = daysSince(claim.updatedAt);
+  const missingDocs = claim.documentChecklist
+    .filter((item) => item.status !== "received")
+    .map((item) => item.name)
+    .join(" and ");
+  if (task.stage === "documents") {
+    return `${claim.claimId} is missing ${missingDocs || "required documents"}. What's the best way to follow up with the claimant given the ${claim.priority} priority and ${delayDays}-day delay?`;
+  }
+  if (task.stage === "coverage") {
+    return `${claim.claimId} is in coverage review with this issue: ${claim.issue}. What should the adjuster do next, and what decision risks should they document?`;
+  }
+  if (task.stage === "resolution") {
+    return `${claim.claimId} is ready for resolution but still blocked by ${claim.issue}. Draft the next adjuster action and a claimant-facing follow-up note.`;
+  }
+  return `Review ${claim.claimId}. What is the next best operational action for the adjuster on this file?`;
+}
+
 function buildTasks(claims, taskStatuses) {
-  const now = Date.now();
   return claims
-    .filter((claim) => !claim.closed && Object.hasOwn(TASK_TEMPLATES, claim.stage))
+    .filter((claim) => !claim.closed && claim.stage !== "fnol")
     .flatMap((claim) => {
-      const template = TASK_TEMPLATES[claim.stage];
-      const dueDate = new Date(new Date(claim.updatedAt).getTime() + template.dueDays * 86400000).toISOString();
-      return template.items.map((title) => {
-        const id = buildTaskId(claim, title);
+      let items = [];
+      if (claim.stage === "documents") {
+        const missingDocs = claim.documentChecklist.filter((item) => item.status !== "received").map((item) => item.name);
+        items = [
+          {
+            title: missingDocs.length ? `Collect ${missingDocs.join(" + ")}` : "Confirm document package completeness",
+            dueDate: new Date(new Date(claim.updatedAt).getTime() + 2 * 86400000).toISOString(),
+          },
+          {
+            title: "Claimant follow-up",
+            dueDate: new Date(new Date(claim.updatedAt).getTime() + 1 * 86400000).toISOString(),
+          },
+        ];
+      } else if (claim.stage === "coverage") {
+        items = [
+          {
+            title: "Coverage decision review",
+            dueDate: new Date(new Date(claim.updatedAt).getTime() + 1 * 86400000).toISOString(),
+          },
+          {
+            title: "Escalate issue note",
+            dueDate: new Date(new Date(claim.updatedAt).getTime() + 1 * 86400000).toISOString(),
+          },
+        ];
+      } else if (claim.stage === "resolution") {
+        items = [
+          {
+            title: "Close settlement package",
+            dueDate: new Date(new Date(claim.updatedAt).getTime() + 1 * 86400000).toISOString(),
+          },
+        ];
+      } else if (claim.stage === "triage") {
+        items = [
+          {
+            title: "Confirm triage disposition",
+            dueDate: new Date(new Date(claim.updatedAt).getTime() + 1 * 86400000).toISOString(),
+          },
+        ];
+      }
+
+      return items.map((item) => {
+        const id = buildTaskId(claim, item.title);
         const status = taskStatuses[id] ?? "pending";
         return {
           id,
-          title,
+          title: item.title,
           claimId: claim.claimId,
           stage: claim.stage,
-          dueDate,
+          dueDate: item.dueDate,
           adjusterAssigned: claim.adjusterAssigned,
           status,
-          overdue: status !== "done" && new Date(dueDate).getTime() < now,
+          overdue: status !== "done" && new Date(item.dueDate).getTime() < Date.now(),
+          prompt: buildAgentPrompt({ stage: claim.stage, title: item.title }, claim),
         };
       });
     });
@@ -437,7 +679,7 @@ function App() {
   const [claims, setClaims] = useState([]);
   const [hydrated, setHydrated] = useState(false);
   const [selectedClaimId, setSelectedClaimId] = useState("");
-  const [activeTab, setActiveTab] = useState("claim");
+  const [activeTab, setActiveTab] = useState("tasks");
   const [taskStatuses, setTaskStatuses] = useState({});
   const [selectedAdjuster, setSelectedAdjuster] = useState("All Adjusters");
   const [chatMessages, setChatMessages] = useState([]);
@@ -448,12 +690,15 @@ function App() {
   const [llmProvider, setLlmProvider] = useState("anthropic");
   const [llmModel, setLlmModel] = useState(MODEL_DEFAULTS.anthropic);
   const [configOpen, setConfigOpen] = useState(false);
+  const [contextOpen, setContextOpen] = useState(false);
+  const [agentFeed, setAgentFeed] = useState([]);
 
   useEffect(() => {
     const storedClaims = window.localStorage.getItem(CLAIMS_STORAGE_KEY);
     const storedTasks = window.localStorage.getItem(TASKS_STORAGE_KEY);
     const storedChat = window.localStorage.getItem(CHAT_STORAGE_KEY);
     const storedChatConfig = window.localStorage.getItem(CHAT_CONFIG_STORAGE_KEY);
+    const storedFeed = window.localStorage.getItem(AGENT_FEED_STORAGE_KEY);
     const nextClaims = storedClaims ? JSON.parse(storedClaims) : SAMPLE_CLAIMS;
     const nextTasks = storedTasks ? JSON.parse(storedTasks) : {};
     const nextChat = storedChat
@@ -461,25 +706,35 @@ function App() {
       : [
           {
             role: "assistant",
-            content: "Claims assistant is ready. Ask about overdue files, missing documents, priorities, or stage timing.",
+            content: "Claims assistant is ready. Ask about the full New York claims portfolio, overdue tasks, coverage blockers, or reserve exposure.",
           },
         ];
     const nextChatConfig = storedChatConfig
       ? JSON.parse(storedChatConfig)
       : { provider: "anthropic", model: MODEL_DEFAULTS.anthropic };
+    const nextFeed = storedFeed
+      ? JSON.parse(storedFeed)
+      : [
+          {
+            title: "Portfolio context loaded",
+            detail: "Agent initialized with all 5 active NY specialty claims.",
+            claims: ["CLM-260501", "CLM-260502", "CLM-260503", "CLM-260504", "CLM-260505"],
+            timestamp: "2026-05-07T16:00:00Z",
+          },
+        ];
+
+    const nextProvider = nextChatConfig.provider || "anthropic";
+    const providerModels = MODEL_OPTIONS[nextProvider] || MODEL_OPTIONS.anthropic;
+    const nextModel = providerModels.includes(nextChatConfig.model) ? nextChatConfig.model : providerModels[0];
 
     setClaims(nextClaims);
     setTaskStatuses(nextTasks);
     setChatMessages(nextChat);
-    const nextProvider = nextChatConfig.provider || "anthropic";
-    const providerModels = MODEL_OPTIONS[nextProvider] || MODEL_OPTIONS.anthropic;
-    const nextModel = providerModels.includes(nextChatConfig.model)
-      ? nextChatConfig.model
-      : providerModels[0];
+    setAgentFeed(nextFeed);
     setLlmProvider(nextProvider);
     setLlmModel(nextModel);
     setSelectedClaimId(nextClaims[0]?.claimId ?? "");
-    setSelectedAdjuster(nextClaims[0]?.adjusterAssigned ?? "All Adjusters");
+    setSelectedAdjuster("All Adjusters");
     setHydrated(true);
   }, []);
 
@@ -491,7 +746,7 @@ function App() {
   useEffect(() => {
     if (!hydrated) return;
     window.localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(taskStatuses));
-  }, [hydrated, taskStatuses]);
+  }, [taskStatuses, hydrated]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -500,11 +755,13 @@ function App() {
 
   useEffect(() => {
     if (!hydrated) return;
-    window.localStorage.setItem(
-      CHAT_CONFIG_STORAGE_KEY,
-      JSON.stringify({ provider: llmProvider, model: llmModel }),
-    );
-  }, [hydrated, llmModel, llmProvider]);
+    window.localStorage.setItem(CHAT_CONFIG_STORAGE_KEY, JSON.stringify({ provider: llmProvider, model: llmModel }));
+  }, [hydrated, llmProvider, llmModel]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    window.localStorage.setItem(AGENT_FEED_STORAGE_KEY, JSON.stringify(agentFeed));
+  }, [agentFeed, hydrated]);
 
   const selectedClaim = useMemo(
     () => claims.find((claim) => claim.claimId === selectedClaimId) ?? null,
@@ -526,13 +783,18 @@ function App() {
         : tasks.filter((task) => task.adjusterAssigned === selectedAdjuster),
     [selectedAdjuster, tasks],
   );
+  const agentTasks = useMemo(() => tasks.slice(0, 6), [tasks]);
+  const maxStageCount = Math.max(1, ...Object.values(metrics.stageCounts || { fnol: 1 }));
+  const showIntegrationsPanel = activeTab === "dashboard";
+
+  const pushAgentFeed = (entry) => {
+    setAgentFeed((current) => [entry, ...current].slice(0, 12));
+  };
 
   const upsertClaim = (nextClaim) => {
     setClaims((current) => {
       const exists = current.some((claim) => claim.claimId === nextClaim.claimId);
-      if (!exists) {
-        return [nextClaim, ...current];
-      }
+      if (!exists) return [nextClaim, ...current];
       return current.map((claim) => (claim.claimId === nextClaim.claimId ? nextClaim : claim));
     });
     setSelectedClaimId(nextClaim.claimId);
@@ -559,12 +821,14 @@ function App() {
     updateClaimById(selectedClaim.claimId, { stage: STAGES[nextIndex].id });
   };
 
-  const toggleDocument = (document) => {
+  const toggleDocumentStatus = (documentName) => {
     if (!selectedClaim) return;
-    const documents = selectedClaim.documents.includes(document)
-      ? selectedClaim.documents.filter((item) => item !== document)
-      : [...selectedClaim.documents, document];
-    updateClaimById(selectedClaim.claimId, { documents });
+    const nextChecklist = selectedClaim.documentChecklist.map((item) =>
+      item.name === documentName
+        ? { ...item, status: item.status === "received" ? "pending" : "received" }
+        : item,
+    );
+    updateClaimById(selectedClaim.claimId, { documentChecklist: nextChecklist });
   };
 
   const updateTaskStatus = (task, status) => {
@@ -579,6 +843,14 @@ function App() {
         updateClaimById(task.claimId, {
           stage: nextStage(task.stage),
           notes: `${claim.notes}\n${stageLabel(task.stage)} task bundle completed ${new Date().toLocaleString("en-US")}.`.trim(),
+          timeline: [
+            ...claim.timeline,
+            {
+              timestamp: new Date().toISOString(),
+              title: `${stageLabel(task.stage)} tasks completed`,
+              detail: "Workflow advanced automatically after all open tasks were marked done.",
+            },
+          ],
         });
       }
     }
@@ -590,6 +862,28 @@ function App() {
       closed: true,
       stage: "resolution",
       notes: `${selectedClaim.notes}\nClosed ${new Date().toLocaleString("en-US")} by ${selectedClaim.adjusterAssigned}.`.trim(),
+      timeline: [
+        ...selectedClaim.timeline,
+        {
+          timestamp: new Date().toISOString(),
+          title: "Claim closed",
+          detail: `Closed by ${selectedClaim.adjusterAssigned}.`,
+        },
+      ],
+    });
+  };
+
+  const loadAgentPrompt = (task) => {
+    const claim = claims.find((item) => item.claimId === task.claimId);
+    if (!claim) return;
+    setSelectedClaimId(claim.claimId);
+    setChatDraft(task.prompt);
+    setActiveTab("agent");
+    pushAgentFeed({
+      title: "Agent prompt prepared",
+      detail: `Prepared follow-up prompt for ${task.title.toLowerCase()}.`,
+      claims: [claim.claimId],
+      timestamp: new Date().toISOString(),
     });
   };
 
@@ -601,11 +895,20 @@ function App() {
       setChatError("Google models are available in configuration, but this demo API only wires Anthropic and OpenAI chat providers.");
       return;
     }
+
     const nextMessages = [...chatMessages, { role: "user", content: question }];
     setChatMessages(nextMessages);
     setChatDraft("");
     setChatLoading(true);
     setChatError("");
+
+    const inScopeClaims = extractReferencedClaims(question, claims);
+    pushAgentFeed({
+      title: "Agent asked to review portfolio",
+      detail: question,
+      claims: inScopeClaims.length ? inScopeClaims : claims.map((claim) => claim.claimId),
+      timestamp: new Date().toISOString(),
+    });
 
     try {
       const response = await fetch("/api/chat", {
@@ -633,6 +936,12 @@ function App() {
           meta: `${payload.latency_ms} ms · ${payload.usage?.input_tokens ?? 0}/${payload.usage?.output_tokens ?? 0} tokens`,
         },
       ]);
+      pushAgentFeed({
+        title: "Agent recommendation returned",
+        detail: payload.message,
+        claims: inScopeClaims.length ? inScopeClaims : claims.map((claim) => claim.claimId),
+        timestamp: new Date().toISOString(),
+      });
     } catch (error) {
       setChatError(error.message);
     } finally {
@@ -642,67 +951,47 @@ function App() {
 
   const triage = selectedClaim ? derivePriority(selectedClaim) : null;
   const coverage = selectedClaim ? deriveCoverage(selectedClaim) : null;
-  const requiredDocuments = selectedClaim ? getRequiredDocuments(selectedClaim.priority) : [];
-  const maxStageCount = Math.max(1, ...Object.values(metrics.stageCounts || { fnol: 1 }));
 
   return (
     <div className="workspace">
       <header className="masthead">
         <div className="masthead-brand">
           <svg className="brand-mark" width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <line x1="17" y1="2" x2="17" y2="32" stroke="#C8922A" strokeWidth="2.5" strokeLinecap="round"/>
-            <line x1="2" y1="17" x2="32" y2="17" stroke="#C8922A" strokeWidth="2.5" strokeLinecap="round"/>
-            <line x1="6.51" y1="6.51" x2="27.49" y2="27.49" stroke="#C8922A" strokeWidth="2.5" strokeLinecap="round"/>
-            <line x1="27.49" y1="6.51" x2="6.51" y2="27.49" stroke="#C8922A" strokeWidth="2.5" strokeLinecap="round"/>
-            <line x1="3.76" y1="11.5" x2="30.24" y2="22.5" stroke="#C8922A" strokeWidth="1.5" strokeLinecap="round"/>
-            <line x1="11.5" y1="3.76" x2="22.5" y2="30.24" stroke="#C8922A" strokeWidth="1.5" strokeLinecap="round"/>
-            <line x1="30.24" y1="11.5" x2="3.76" y2="22.5" stroke="#C8922A" strokeWidth="1.5" strokeLinecap="round"/>
-            <line x1="22.5" y1="3.76" x2="11.5" y2="30.24" stroke="#C8922A" strokeWidth="1.5" strokeLinecap="round"/>
+            <line x1="17" y1="2" x2="17" y2="32" stroke="#C8922A" strokeWidth="2.5" strokeLinecap="round" />
+            <line x1="2" y1="17" x2="32" y2="17" stroke="#C8922A" strokeWidth="2.5" strokeLinecap="round" />
+            <line x1="6.51" y1="6.51" x2="27.49" y2="27.49" stroke="#C8922A" strokeWidth="2.5" strokeLinecap="round" />
+            <line x1="27.49" y1="6.51" x2="6.51" y2="27.49" stroke="#C8922A" strokeWidth="2.5" strokeLinecap="round" />
+            <line x1="3.76" y1="11.5" x2="30.24" y2="22.5" stroke="#C8922A" strokeWidth="1.5" strokeLinecap="round" />
+            <line x1="11.5" y1="3.76" x2="22.5" y2="30.24" stroke="#C8922A" strokeWidth="1.5" strokeLinecap="round" />
+            <line x1="30.24" y1="11.5" x2="3.76" y2="22.5" stroke="#C8922A" strokeWidth="1.5" strokeLinecap="round" />
+            <line x1="22.5" y1="3.76" x2="11.5" y2="30.24" stroke="#C8922A" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
           <div>
             <p className="kicker">Claims Management</p>
-            <h1>ValonOS — Motorcycle Insurance</h1>
+            <h1>ValonOS — Specialty Insurance</h1>
           </div>
         </div>
-        <button
-          aria-label="Open configuration"
-          className="settings-button"
-          onClick={() => setConfigOpen(true)}
-          type="button"
-        >
+        <button aria-label="Open configuration" className="settings-button" onClick={() => setConfigOpen(true)} type="button">
           ⚙
         </button>
       </header>
 
       <section className="toolbar">
         <div className="tab-strip">
-          <button
-            className={`tab-button ${activeTab === "tasks" ? "active" : ""}`}
-            onClick={() => setActiveTab("tasks")}
-            type="button"
-          >
+          <button className={`tab-button ${activeTab === "tasks" ? "active" : ""}`} onClick={() => setActiveTab("tasks")} type="button">
             My Tasks
           </button>
-          <button
-            className={`tab-button ${activeTab === "claim" ? "active" : ""}`}
-            onClick={() => setActiveTab("claim")}
-            type="button"
-          >
+          <button className={`tab-button ${activeTab === "claim" ? "active" : ""}`} onClick={() => setActiveTab("claim")} type="button">
             Claim Detail
           </button>
-          <button
-            className={`tab-button ${activeTab === "dashboard" ? "active" : ""}`}
-            onClick={() => setActiveTab("dashboard")}
-            type="button"
-          >
+          <button className={`tab-button ${activeTab === "dashboard" ? "active" : ""}`} onClick={() => setActiveTab("dashboard")} type="button">
             Dashboard
           </button>
-          <button
-            className={`tab-button ${activeTab === "finance" ? "active" : ""}`}
-            onClick={() => setActiveTab("finance")}
-            type="button"
-          >
+          <button className={`tab-button ${activeTab === "finance" ? "active" : ""}`} onClick={() => setActiveTab("finance")} type="button">
             Finance View
+          </button>
+          <button className={`tab-button ${activeTab === "agent" ? "active" : ""}`} onClick={() => setActiveTab("agent")} type="button">
+            Agent Ops
           </button>
         </div>
         <button className="action-button" onClick={createClaim} type="button">
@@ -710,36 +999,38 @@ function App() {
         </button>
       </section>
 
-      <section className="layout">
-        <aside className="claim-list-panel">
-          <div className="section-head">
-            <h2>Claims Queue</h2>
-            <span>{metrics.activeClaims} active</span>
-          </div>
-          <div className="claim-list">
-            {claims.map((claim) => (
-              <button
-                key={claim.claimId}
-                className={`claim-row ${selectedClaimId === claim.claimId ? "selected" : ""}`}
-                onClick={() => {
-                  setSelectedClaimId(claim.claimId);
-                  setActiveTab("claim");
-                }}
-                type="button"
-              >
-                <div className="claim-row-top">
-                  <strong>{claim.claimId}</strong>
-                  <span className={`priority-badge ${claim.priority}`}>{claim.priority}</span>
-                </div>
-                <div className="claimant-name">{claim.claimantName || "Unassigned claimant"}</div>
-                <div className="claim-row-meta">
-                  <span>{stageLabel(claim.stage)}</span>
-                  <span>{formatDate(claim.createdAt)}</span>
-                </div>
-              </button>
-            ))}
-          </div>
-        </aside>
+      <section className={`layout ${activeTab === "agent" ? "agent-mode" : showIntegrationsPanel ? "with-integrations" : "without-integrations"}`}>
+        {activeTab !== "agent" ? (
+          <aside className="claim-list-panel">
+            <div className="section-head">
+              <h2>Claims Queue</h2>
+              <span>{metrics.activeClaims} active</span>
+            </div>
+            <div className="claim-list">
+              {claims.map((claim) => (
+                <button
+                  key={claim.claimId}
+                  className={`claim-row ${selectedClaimId === claim.claimId ? "selected" : ""}`}
+                  onClick={() => {
+                    setSelectedClaimId(claim.claimId);
+                    setActiveTab("claim");
+                  }}
+                  type="button"
+                >
+                  <div className="claim-row-top">
+                    <strong>{claim.claimId}</strong>
+                    <span className={`priority-badge ${claim.priority}`}>{claim.priority}</span>
+                  </div>
+                  <div className="claimant-name">{claim.claimantName}</div>
+                  <div className="claim-row-meta">
+                    <span>{stageLabel(claim.stage)}</span>
+                    <span>{claim.assetType}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </aside>
+        ) : null}
 
         <main className="main-panel">
           {activeTab === "dashboard" ? (
@@ -762,9 +1053,7 @@ function App() {
                 <div className="system-health-stats">
                   <span className="health-chip connected">{systemHealth.counts.connected} connected</span>
                   <span className="health-chip pending">{systemHealth.counts.pending} pending</span>
-                  <span className="health-chip not-configured">
-                    {systemHealth.counts["not-configured"]} not configured
-                  </span>
+                  <span className="health-chip not-configured">{systemHealth.counts["not-configured"]} not configured</span>
                 </div>
               </div>
               <div className="chart-panel">
@@ -801,28 +1090,10 @@ function App() {
                 <span>CFO and BizOps snapshot</span>
               </div>
               <div className="metrics-grid finance-metrics-grid">
-                <MetricCard
-                  label="Combined Ratio"
-                  value={formatPercent(finance.combinedRatio)}
-                  tone={combinedRatioTone(finance.combinedRatio)}
-                  detail="Under 100% indicates underwriting profitability"
-                />
-                <MetricCard
-                  label="Loss Ratio"
-                  value={formatPercent(finance.lossRatio)}
-                  tone="good"
-                  detail={`${formatPercent(finance.claimsFrequency)} claims frequency`}
-                />
-                <MetricCard
-                  label="Premiums Earned"
-                  value={formatCurrency(finance.premiumsEarned)}
-                  detail={`${formatCurrency(finance.averagePremiumPerPolicy)} avg premium per policy`}
-                />
-                <MetricCard
-                  label="Claims Incurred"
-                  value={formatCurrency(finance.claimsIncurred)}
-                  detail={`${formatCurrency(finance.averageClaimSeverity)} avg claim severity`}
-                />
+                <MetricCard label="Combined Ratio" value={formatPercent(finance.combinedRatio)} tone={combinedRatioTone(finance.combinedRatio)} detail="Under 100% indicates underwriting profitability" />
+                <MetricCard label="Loss Ratio" value={formatPercent(finance.lossRatio)} tone="good" detail={`${formatPercent(finance.claimsFrequency)} claims frequency`} />
+                <MetricCard label="Premiums Earned" value={formatCurrency(finance.premiumsEarned)} detail={`${formatCurrency(finance.averagePremiumPerPolicy)} avg premium per policy`} />
+                <MetricCard label="Claims Incurred" value={formatCurrency(finance.claimsIncurred)} detail={`${formatCurrency(finance.averageClaimSeverity)} avg claim severity`} />
               </div>
               <div className="finance-grid">
                 <div className="chart-panel">
@@ -842,9 +1113,7 @@ function App() {
                       <div className="reserve-row" key={tier.priority}>
                         <div>
                           <strong>{capitalize(tier.priority)} Priority</strong>
-                          <span>
-                            {formatInteger(tier.openCount)} open claims · {formatCurrency(tier.averageReserve)} avg reserve
-                          </span>
+                          <span>{formatInteger(tier.openCount)} open claims · {formatCurrency(tier.averageReserve)} avg reserve</span>
                         </div>
                         <strong>{formatCurrency(tier.totalReserve)}</strong>
                       </div>
@@ -853,10 +1122,7 @@ function App() {
                   <div className="reserve-total">
                     <KeyValue label="Total Reserve Requirement" value={formatCurrency(finance.totalReserveRequirement)} />
                     <KeyValue label="Claims Reserved" value={formatCurrency(finance.claimsReserved)} />
-                    <KeyValue
-                      label="Reserve Coverage"
-                      value={`${finance.reserveCoverageRatio.toFixed(1)}x modeled open-claim need`}
-                    />
+                    <KeyValue label="Reserve Coverage" value={`${finance.reserveCoverageRatio.toFixed(1)}x modeled open-claim need`} />
                   </div>
                 </div>
               </div>
@@ -899,16 +1165,10 @@ function App() {
                   <div className={`task-row ${task.overdue ? "overdue" : ""}`} key={task.id}>
                     <div className="task-main">
                       <strong>{task.title}</strong>
-                      <span>
-                        {task.claimId} · {stageLabel(task.stage)} · Due {formatDateTime(task.dueDate)}
-                      </span>
+                      <span>{task.claimId} · {stageLabel(task.stage)} · Due {formatDateTime(task.dueDate)}</span>
                     </div>
                     <div className="task-actions">
-                      <input
-                        checked={task.status === "done"}
-                        onChange={(event) => updateTaskStatus(task, event.target.checked ? "done" : "pending")}
-                        type="checkbox"
-                      />
+                      <input checked={task.status === "done"} onChange={(event) => updateTaskStatus(task, event.target.checked ? "done" : "pending")} type="checkbox" />
                       <select value={task.status} onChange={(event) => updateTaskStatus(task, event.target.value)}>
                         <option value="pending">pending</option>
                         <option value="in progress">in progress</option>
@@ -928,23 +1188,19 @@ function App() {
                 <div>
                   <h2>{selectedClaim.claimId}</h2>
                   <p>
-                    {selectedClaim.claimantName || "New intake"} · {selectedClaim.policyNumber} ·{" "}
-                    {selectedClaim.vehicleYear} {selectedClaim.vehicleMake} {selectedClaim.vehicleModel}
+                    {selectedClaim.claimantName} · {selectedClaim.claimantAge}, {selectedClaim.claimantLocation} · {selectedClaim.policyNumber}
                   </p>
                 </div>
                 <div className="detail-head-meta">
                   <span className={`priority-badge ${selectedClaim.priority}`}>{selectedClaim.priority}</span>
-                  <span className={`status-chip ${selectedClaim.coverageStatus}`}>
-                    {selectedClaim.coverageStatus}
-                  </span>
+                  <span className={`status-chip ${selectedClaim.coverageStatus}`}>{selectedClaim.coverageStatus}</span>
                 </div>
               </div>
 
               <div className="progress-strip">
                 {STAGES.map((stage, index) => {
                   const currentIndex = stageIndex(selectedClaim.stage);
-                  const state =
-                    index < currentIndex ? "complete" : index === currentIndex ? "active" : "upcoming";
+                  const state = index < currentIndex ? "complete" : index === currentIndex ? "active" : "upcoming";
                   return (
                     <div className={`progress-step ${state}`} key={stage.id}>
                       <span className="step-number">{index + 1}</span>
@@ -965,178 +1221,64 @@ function App() {
 
               <section className="detail-grid">
                 <div className="content-panel">
-                  {selectedClaim.stage === "fnol" ? (
-                    <div className="stage-block">
-                      <h3>FNOL Intake</h3>
-                      <div className="form-grid">
-                        <Field label="Claimant Name">
-                          <input
-                            value={selectedClaim.claimantName}
-                            onChange={(event) => updateClaimById(selectedClaim.claimId, { claimantName: event.target.value })}
-                          />
-                        </Field>
-                        <Field label="Policy Number">
-                          <select
-                            value={selectedClaim.policyNumber}
-                            onChange={(event) => updateClaimById(selectedClaim.claimId, { policyNumber: event.target.value })}
-                          >
-                            {Object.keys(POLICY_DETAILS).map((policyNumber) => (
-                              <option key={policyNumber} value={policyNumber}>
-                                {policyNumber}
-                              </option>
-                            ))}
-                          </select>
-                        </Field>
-                        <Field label="Incident Date">
-                          <input
-                            type="date"
-                            value={selectedClaim.incidentDate}
-                            onChange={(event) => updateClaimById(selectedClaim.claimId, { incidentDate: event.target.value })}
-                          />
-                        </Field>
-                        <Field label="Damage Severity">
-                          <select
-                            value={selectedClaim.damageSeverity}
-                            onChange={(event) => updateClaimById(selectedClaim.claimId, { damageSeverity: event.target.value })}
-                          >
-                            <option value="minor">minor</option>
-                            <option value="moderate">moderate</option>
-                            <option value="severe">severe</option>
-                          </select>
-                        </Field>
-                        <Field label="Vehicle Make">
-                          <input
-                            value={selectedClaim.vehicleMake}
-                            onChange={(event) => updateClaimById(selectedClaim.claimId, { vehicleMake: event.target.value })}
-                          />
-                        </Field>
-                        <Field label="Vehicle Model">
-                          <input
-                            value={selectedClaim.vehicleModel}
-                            onChange={(event) => updateClaimById(selectedClaim.claimId, { vehicleModel: event.target.value })}
-                          />
-                        </Field>
-                        <Field label="Vehicle Year">
-                          <input
-                            value={selectedClaim.vehicleYear}
-                            onChange={(event) => updateClaimById(selectedClaim.claimId, { vehicleYear: event.target.value })}
-                          />
-                        </Field>
-                        <Field label="Injury Involved">
-                          <select
-                            value={String(selectedClaim.injuryInvolved)}
-                            onChange={(event) =>
-                              updateClaimById(selectedClaim.claimId, { injuryInvolved: event.target.value === "true" })
-                            }
-                          >
-                            <option value="false">No</option>
-                            <option value="true">Yes</option>
-                          </select>
-                        </Field>
-                        <Field label="Incident Description" full>
-                          <textarea
-                            value={selectedClaim.incidentDescription}
-                            onChange={(event) =>
-                              updateClaimById(selectedClaim.claimId, { incidentDescription: event.target.value })
-                            }
-                          />
-                        </Field>
-                      </div>
-                    </div>
-                  ) : null}
+                  <div className="detail-section">
+                    <h3>Incident Narrative</h3>
+                    <p>{selectedClaim.incidentDescription}</p>
+                  </div>
 
-                  {selectedClaim.stage === "triage" ? (
-                    <div className="stage-block">
-                      <h3>AI Triage</h3>
-                      <div className="decision-banner">
-                        <span className={`priority-badge ${triage.priority}`}>{triage.priority}</span>
-                        <p>{triage.reasoning}</p>
-                      </div>
-                      <div className="key-value-list">
-                        <KeyValue label="Injury Involved" value={selectedClaim.injuryInvolved ? "Yes" : "No"} />
-                        <KeyValue label="Damage Severity" value={selectedClaim.damageSeverity} />
-                        <KeyValue label="Assigned Adjuster" value={selectedClaim.adjusterAssigned} />
-                      </div>
+                  <div className="detail-section">
+                    <h3>Vehicle / Vessel</h3>
+                    <div className="key-value-list">
+                      <KeyValue label="Asset Type" value={selectedClaim.assetType} />
+                      <KeyValue label="Unit" value={`${selectedClaim.vehicleYear} ${selectedClaim.vehicleMake} ${selectedClaim.vehicleModel}`} />
+                      <KeyValue label="Incident Date" value={formatDate(selectedClaim.incidentDate)} />
+                      <KeyValue label="Adjuster" value={selectedClaim.adjusterAssigned} />
                     </div>
-                  ) : null}
+                  </div>
 
-                  {selectedClaim.stage === "documents" ? (
-                    <div className="stage-block">
-                      <h3>Document Collection</h3>
-                      <div className="checklist">
-                        {requiredDocuments.map((document) => (
-                          <label className="check-row" key={document}>
-                            <div>
-                              <strong>{document}</strong>
-                              <span>{selectedClaim.documents.includes(document) ? "Received" : "Pending"}</span>
-                            </div>
-                            <input
-                              checked={selectedClaim.documents.includes(document)}
-                              onChange={() => toggleDocument(document)}
-                              type="checkbox"
-                            />
-                          </label>
-                        ))}
-                      </div>
+                  <div className="detail-section">
+                    <h3>Document Checklist</h3>
+                    <div className="checklist">
+                      {selectedClaim.documentChecklist.map((document) => (
+                        <label className="check-row" key={document.name}>
+                          <div>
+                            <strong>{document.name}</strong>
+                            <span>{document.status === "received" ? "Received" : "Pending"} · {document.notes}</span>
+                          </div>
+                          <input checked={document.status === "received"} onChange={() => toggleDocumentStatus(document.name)} type="checkbox" />
+                        </label>
+                      ))}
                     </div>
-                  ) : null}
+                  </div>
 
-                  {selectedClaim.stage === "coverage" ? (
-                    <div className="stage-block">
-                      <h3>Coverage Check</h3>
-                      <div className="key-value-list">
-                        <KeyValue label="Policy Type" value={coverage.policy.policyType} />
-                        <KeyValue label="Incident Type" value={coverage.policy.incidentType} />
-                        <KeyValue label="Coverage Determination" value={coverage.reason} />
-                        <KeyValue label="Coverage Status" value={coverage.status} />
-                      </div>
-                      <div className="exclusions-panel">
-                        <h4>Exclusions</h4>
-                        <ul>
-                          {coverage.policy.exclusions.map((item) => (
-                            <li key={item}>{item}</li>
-                          ))}
-                        </ul>
-                      </div>
+                  <div className="detail-section">
+                    <h3>Coverage Determination</h3>
+                    <div className="decision-banner">
+                      <span className={`status-chip ${selectedClaim.coverageStatus}`}>{selectedClaim.coverageStatus}</span>
+                      <p>{coverage.reason}</p>
                     </div>
-                  ) : null}
+                    <div className="exclusions-panel">
+                      <h4>Policy Context</h4>
+                      <ul>
+                        <li>{coverage.policy.policyType}</li>
+                        <li>{coverage.policy.determination}</li>
+                        <li>Exclusions: {coverage.policy.exclusions.join(", ")}</li>
+                      </ul>
+                    </div>
+                  </div>
 
-                  {selectedClaim.stage === "resolution" ? (
-                    <div className="stage-block">
-                      <h3>Resolution</h3>
-                      <div className="form-grid">
-                        <Field label="Estimated Payout">
-                          <input
-                            type="number"
-                            value={selectedClaim.estimatedPayout}
-                            onChange={(event) =>
-                              updateClaimById(selectedClaim.claimId, { estimatedPayout: Number(event.target.value) })
-                            }
-                          />
-                        </Field>
-                        <Field label="Adjuster Assigned">
-                          <input
-                            value={selectedClaim.adjusterAssigned}
-                            onChange={(event) =>
-                              updateClaimById(selectedClaim.claimId, { adjusterAssigned: event.target.value })
-                            }
-                          />
-                        </Field>
-                        <Field label="Adjuster Notes" full>
-                          <textarea
-                            value={selectedClaim.notes}
-                            onChange={(event) => updateClaimById(selectedClaim.claimId, { notes: event.target.value })}
-                          />
-                        </Field>
-                      </div>
-                      <div className="resolution-actions">
-                        <button className="action-button" onClick={closeClaim} type="button">
-                          Close Claim
-                        </button>
-                        <span>{selectedClaim.closed ? "Closed" : "Open"} · Updated {formatDateTime(selectedClaim.updatedAt)}</span>
-                      </div>
+                  <div className="detail-section">
+                    <h3>Timeline of Actions</h3>
+                    <div className="timeline-list">
+                      {selectedClaim.timeline.map((event) => (
+                        <div className="timeline-item" key={`${selectedClaim.claimId}-${event.timestamp}-${event.title}`}>
+                          <strong>{event.title}</strong>
+                          <span>{formatDateTime(event.timestamp)}</span>
+                          <p>{event.detail}</p>
+                        </div>
+                      ))}
                     </div>
-                  ) : null}
+                  </div>
                 </div>
 
                 <div className="summary-panel">
@@ -1150,78 +1292,208 @@ function App() {
                     </div>
                   </div>
                   <div className="summary-block">
-                    <h3>Coverage Summary</h3>
-                    <p>{coverage.policy.determination}</p>
+                    <h3>Exposure</h3>
+                    <div className="key-value-list">
+                      <KeyValue label="Estimated Payout" value={selectedClaim.payoutLabel} />
+                      <KeyValue label="Missing Docs" value={String(documentStatusMissingCount(selectedClaim))} />
+                      <KeyValue label="Issue" value={selectedClaim.issue || "None"} />
+                    </div>
                   </div>
                   <div className="summary-block">
-                    <h3>Notes</h3>
+                    <h3>Adjuster Notes</h3>
                     <p className="notes-copy">{selectedClaim.notes || "No notes entered."}</p>
+                  </div>
+                  <div className="summary-block">
+                    <h3>Resolution</h3>
+                    <div className="resolution-actions resolution-inline">
+                      <button className="action-button" onClick={closeClaim} type="button">
+                        Close Claim
+                      </button>
+                      <span>{selectedClaim.closed ? "Closed" : "Open"}</span>
+                    </div>
                   </div>
                 </div>
               </section>
             </section>
           ) : null}
+
+          {activeTab === "agent" ? (
+            <section className="screen-panel agent-screen">
+              <div className="agent-layout">
+                <aside className="agent-sidebar">
+                  <div className="agent-stack">
+                    <div className="summary-block">
+                      <div className="section-head">
+                        <h3>Claims Queue</h3>
+                        <span>{claims.length} in scope</span>
+                      </div>
+                      <div className="agent-queue-list">
+                        {claims.map((claim) => (
+                          <button
+                            key={claim.claimId}
+                            className={`claim-row ${selectedClaimId === claim.claimId ? "selected" : ""}`}
+                            onClick={() => setSelectedClaimId(claim.claimId)}
+                            type="button"
+                          >
+                            <div className="claim-row-top">
+                              <strong>{claim.claimId}</strong>
+                              <span className={`priority-badge ${claim.priority}`}>{claim.priority}</span>
+                            </div>
+                            <div className="claimant-name">{claim.claimantName}</div>
+                            <div className="claim-row-meta">
+                              <span>{stageLabel(claim.stage)}</span>
+                              <span>{claim.adjusterAssigned}</span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="summary-block">
+                      <div className="section-head">
+                        <h3>Tasks</h3>
+                        <span>{agentTasks.length} active</span>
+                      </div>
+                      <div className="task-list compact-task-list">
+                        {agentTasks.map((task) => (
+                          <div className={`task-row compact ${task.overdue ? "overdue" : ""}`} key={task.id}>
+                            <div className="task-main">
+                              <strong>{task.title}</strong>
+                              <span>{task.claimId} · Due {formatDateTime(task.dueDate)}</span>
+                            </div>
+                            <button className="secondary-button" onClick={() => loadAgentPrompt(task)} type="button">
+                              Ask Agent
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </aside>
+
+                <div className="agent-chat-shell">
+                  <div className="section-head">
+                    <h2>Agent Ops</h2>
+                    <span>{providerLabel(llmProvider)} · {llmModel}</span>
+                  </div>
+                  <button className="context-toggle" onClick={() => setContextOpen((current) => !current)} type="button">
+                    Context loaded · {claims.length} claims in scope {contextOpen ? "−" : "+"}
+                  </button>
+                  {contextOpen ? (
+                    <div className="context-panel">
+                      {claims.map((claim) => (
+                        <div className="context-row" key={claim.claimId}>
+                          <strong>{claim.claimId}</strong>
+                          <span>
+                            {claim.claimantName} · {claim.assetType} · {stageLabel(claim.stage)} · {claim.adjusterAssigned}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  <div className="agent-chat-panel">
+                    <div className="agent-chat-history">
+                      {chatMessages.map((message, index) => (
+                        <div className={`chat-bubble ${message.role}`} key={`${message.role}-${index}`}>
+                          <strong>{message.role === "assistant" ? "Agent" : "User"}</strong>
+                          <p>{message.content}</p>
+                          {message.meta ? <span>{message.meta}</span> : null}
+                        </div>
+                      ))}
+                      {chatLoading ? <div className="typing-indicator">{providerLabel(llmProvider)} is reviewing the full claims portfolio...</div> : null}
+                    </div>
+                    {chatError ? <div className="chat-error">{chatError}</div> : null}
+                    <form className="chat-form" onSubmit={sendChat}>
+                      <textarea
+                        placeholder="Ask about the full claims portfolio, blockers, coverage risks, reserve exposure, or next-step recommendations."
+                        value={chatDraft}
+                        onChange={(event) => setChatDraft(event.target.value)}
+                      />
+                      <button className="action-button" type="submit">
+                        Send
+                      </button>
+                    </form>
+                  </div>
+                </div>
+
+                <aside className="agent-activity-panel">
+                  <div className="section-head">
+                    <h3>Agent Activity</h3>
+                    <span>Recent actions</span>
+                  </div>
+                  <div className="activity-feed">
+                    {agentFeed.map((item, index) => (
+                      <div className="activity-item" key={`${item.timestamp}-${index}`}>
+                        <strong>{item.title}</strong>
+                        <span>{formatDateTime(item.timestamp)}</span>
+                        <p>{item.detail}</p>
+                        <small>{item.claims.join(", ")}</small>
+                      </div>
+                    ))}
+                  </div>
+                </aside>
+              </div>
+            </section>
+          ) : null}
         </main>
 
-        <aside className="integration-panel">
-          <div className="section-head">
-            <h2>Integrations</h2>
-            <span>Mock system health</span>
-          </div>
-          <div className="integration-list">
-            {INTEGRATIONS.map((integration) => (
-              <div className="integration-row" key={integration.name}>
-                <div>
-                  <strong>{integration.name}</strong>
-                </div>
-                <span className={`integration-status ${integration.status}`}>
-                  <i />
-                  {integration.status}
-                </span>
-              </div>
-            ))}
-          </div>
-        </aside>
-      </section>
-
-      <section className={`chat-dock ${chatOpen ? "open" : "closed"}`}>
-        <button className="chat-toggle" onClick={() => setChatOpen((current) => !current)} type="button">
-          Agent Chat {chatOpen ? "−" : "+"}
-        </button>
-        {chatOpen ? (
-          <div className="chat-panel">
-            <div className="chat-messages">
-              {chatMessages.map((message, index) => (
-                <div className={`chat-bubble ${message.role}`} key={`${message.role}-${index}`}>
-                  <strong>{message.role === "assistant" ? "Agent" : "User"}</strong>
-                  <p>{message.content}</p>
-                  {message.meta ? <span>{message.meta}</span> : null}
+        {showIntegrationsPanel ? (
+          <aside className="integration-panel">
+            <div className="section-head">
+              <h2>Integrations</h2>
+              <span>Mock system health</span>
+            </div>
+            <div className="integration-list">
+              {INTEGRATIONS.map((integration) => (
+                <div className="integration-row" key={integration.name}>
+                  <div>
+                    <strong>{integration.name}</strong>
+                  </div>
+                  <span className={`integration-status ${integration.status}`}>
+                    <i />
+                    {statusLabel(integration.status)}
+                  </span>
                 </div>
               ))}
-              {chatLoading ? (
-                <div className="typing-indicator">{providerLabel(llmProvider)} is reviewing claims context...</div>
-              ) : null}
             </div>
-            {chatError ? <div className="chat-error">{chatError}</div> : null}
-            <form className="chat-form" onSubmit={sendChat}>
-              <textarea
-                placeholder="Ask about overdue claims, missing documents, priorities, or stage timing."
-                value={chatDraft}
-                onChange={(event) => setChatDraft(event.target.value)}
-              />
-              <button className="action-button" type="submit">
-                Send
-              </button>
-            </form>
-          </div>
+          </aside>
         ) : null}
       </section>
 
-      <div
-        aria-hidden={!configOpen}
-        className={`config-overlay ${configOpen ? "open" : ""}`}
-        onClick={() => setConfigOpen(false)}
-      />
+      {activeTab !== "agent" ? (
+        <section className={`chat-dock ${chatOpen ? "open" : "closed"}`}>
+          <button className="chat-toggle" onClick={() => setChatOpen((current) => !current)} type="button">
+            Agent Chat {chatOpen ? "−" : "+"}
+          </button>
+          {chatOpen ? (
+            <div className="chat-panel">
+              <div className="chat-messages">
+                {chatMessages.map((message, index) => (
+                  <div className={`chat-bubble ${message.role}`} key={`${message.role}-${index}`}>
+                    <strong>{message.role === "assistant" ? "Agent" : "User"}</strong>
+                    <p>{message.content}</p>
+                    {message.meta ? <span>{message.meta}</span> : null}
+                  </div>
+                ))}
+                {chatLoading ? <div className="typing-indicator">{providerLabel(llmProvider)} is reviewing claims context...</div> : null}
+              </div>
+              {chatError ? <div className="chat-error">{chatError}</div> : null}
+              <form className="chat-form" onSubmit={sendChat}>
+                <textarea
+                  placeholder="Ask about overdue claims, missing documents, priorities, or stage timing."
+                  value={chatDraft}
+                  onChange={(event) => setChatDraft(event.target.value)}
+                />
+                <button className="action-button" type="submit">
+                  Send
+                </button>
+              </form>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      <div aria-hidden={!configOpen} className={`config-overlay ${configOpen ? "open" : ""}`} onClick={() => setConfigOpen(false)} />
       <aside className={`config-drawer ${configOpen ? "open" : ""}`} role="dialog" aria-label="Configuration">
         <div className="config-header">
           <div>
@@ -1343,14 +1615,19 @@ function FinancialBarChart({ data }) {
           </g>
         );
       })}
-      <text x="44" y="238" fill="#7A756E" fontSize="12">Green = Premiums</text>
-      <text x="180" y="238" fill="#7A756E" fontSize="12">Amber = Claims</text>
+      <text x="44" y="238" fill="#7A756E" fontSize="12">
+        Green = Premiums
+      </text>
+      <text x="180" y="238" fill="#7A756E" fontSize="12">
+        Amber = Claims
+      </text>
     </svg>
   );
 }
 
-function capitalize(value) {
-  return value.charAt(0).toUpperCase() + value.slice(1);
+function extractReferencedClaims(text, claims) {
+  const matches = claims.filter((claim) => text.includes(claim.claimId)).map((claim) => claim.claimId);
+  return matches;
 }
 
 export default App;

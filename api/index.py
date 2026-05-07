@@ -419,7 +419,7 @@ def call_openai(system_prompt: str, messages: list[dict[str, Any]], model: str) 
     openai_payload = {
         "model": model,
         "messages": [{"role": "system", "content": system_prompt}, *messages],
-        "max_tokens": 700,
+        "max_completion_tokens": 700,
     }
     req = request.Request(
         "https://api.openai.com/v1/chat/completions",
@@ -433,8 +433,13 @@ def call_openai(system_prompt: str, messages: list[dict[str, Any]], model: str) 
     with request.urlopen(req, timeout=60) as response:
         response_payload = json.loads(response.read().decode("utf-8"))
     choice = response_payload.get("choices", [{}])[0]
-    message = choice.get("message", {}).get("content", "")
-    return message.strip(), response_payload.get("usage", {})
+    message_content = choice.get("message", {}).get("content", "")
+    if isinstance(message_content, list):
+        text_parts = [item.get("text", "") for item in message_content if isinstance(item, dict)]
+        message = "\n".join(part for part in text_parts if part).strip()
+    else:
+        message = str(message_content).strip()
+    return message, response_payload.get("usage", {})
 
 
 @app.post("/api/chat")
