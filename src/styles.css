@@ -771,25 +771,29 @@ h4 {
   justify-self: start;
 }
 
+.chat-bubble.assistant {
+  background: #F0EDE8;
+  border-color: #E8E2D9;
+}
+
 .chat-bubble.user {
-  background: #1A1A1A;
-  color: #ffffff;
-  border-color: #1A1A1A;
+  background: #ffffff;
+  color: #1A1A1A;
+  border-color: var(--line);
   justify-self: end;
 }
 
-.chat-bubble.user strong,
-.chat-bubble.user p {
-  color: #ffffff;
+.chat-bubble p {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
 }
 
-.chat-bubble.user span {
-  color: rgba(255, 255, 255, 0.55);
-}
-
-.chat-bubble.assistant {
-  background: #F5F0E8;
-  border-color: #E8E2D9;
+.agent-dot {
+  color: var(--amber);
+  font-size: 11px;
+  line-height: 1.6;
+  flex-shrink: 0;
 }
 
 .typing-indicator,
@@ -848,118 +852,23 @@ h4 {
   gap: 14px;
 }
 
-.context-toggle {
-  width: 100%;
-  border: 1px solid var(--line);
-  background: #f5f0e8;
-  color: #1a1a1a;
-  padding: 12px 14px;
-  text-align: left;
-  border-radius: 8px;
-  cursor: pointer;
-  margin-bottom: 12px;
-}
-
-.context-panel {
-  border: 1px solid var(--line);
-  background: #ffffff;
-  padding: 12px;
-  border-radius: 8px;
-  margin-bottom: 14px;
-  display: grid;
-  gap: 10px;
-}
-
-.tools-panel {
-  display: grid;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-
-.tool-card-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.tool-card {
-  border: 1px solid var(--line);
-  background: #ffffff;
-  border-radius: 8px;
-  padding: 12px;
-  display: grid;
-  gap: 10px;
-}
-
-.tool-card-head,
-.tool-card-meta,
-.tool-status {
-  display: flex;
-  align-items: center;
-}
-
-.tool-card-head,
-.tool-card-meta {
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.tool-card-head div {
-  display: grid;
-  gap: 4px;
-}
-
-.tool-card-head span,
-.tool-card p,
-.tool-card-meta span {
-  color: var(--text-dim);
-}
-
-.tool-card p {
-  margin: 0;
-  line-height: 1.5;
-}
-
-.tool-status {
-  gap: 8px;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.tool-status i {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: currentColor;
-  display: inline-block;
-}
-
-.tool-status.connected {
-  color: #3d7a52;
-}
-
-.tool-status.mock {
-  color: #c8922a;
-}
-
-.context-row {
-  display: grid;
-  gap: 4px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--line);
-}
-
-.context-row:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
-}
-
-.context-row span,
 .activity-item span,
 .activity-item small,
 .timeline-item span {
   color: var(--text-dim);
+}
+
+.scope-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  border: 1px solid var(--line);
+  background: #F7F4EE;
+  color: var(--text-dim);
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  margin-bottom: 12px;
 }
 
 .agent-chat-panel {
@@ -969,6 +878,7 @@ h4 {
   box-shadow: var(--shadow);
   padding: 16px;
   display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto;
   gap: 12px;
   min-height: 620px;
 }
@@ -976,8 +886,49 @@ h4 {
 .agent-chat-history {
   display: grid;
   gap: 12px;
-  max-height: 520px;
+  min-height: 0;
   overflow: auto;
+}
+
+.prompt-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.prompt-pill {
+  border: 1px solid var(--line);
+  background: #F7F4EE;
+  color: #6F685F;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.chat-inline-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px;
+  gap: 10px;
+  align-items: end;
+}
+
+.chat-inline-input {
+  min-height: 44px;
+  max-height: 96px;
+  resize: none;
+  overflow-y: auto;
+  border-radius: 22px;
+  padding: 12px 14px;
+}
+
+.chat-send-button {
+  width: 42px;
+  height: 42px;
+  border: none;
+  border-radius: 50%;
+  background: #1A1A1A;
+  color: #ffffff;
+  cursor: pointer;
 }
 
 .activity-item,
@@ -995,20 +946,6 @@ h4 {
 .detail-section p {
   margin: 0;
   line-height: 1.5;
-}
-
-.source-badge {
-  display: inline-flex;
-  align-items: center;
-  margin: 0 4px;
-  padding: 2px 8px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: #f5f0e8;
-  color: #7b5a18;
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
 }
 
 .activity-item small {
@@ -1154,8 +1091,7 @@ h4 {
   .finance-grid,
   .finance-summary-grid,
   .config-grid,
-  .agent-layout,
-  .tool-card-grid {
+  .agent-layout {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1189,8 +1125,7 @@ h4 {
   .finance-grid,
   .finance-summary-grid,
   .config-grid,
-  .agent-layout,
-  .tool-card-grid {
+  .agent-layout {
     grid-template-columns: 1fr;
   }
 
