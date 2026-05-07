@@ -3,13 +3,27 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import json
+import os
 from statistics import mean
-from typing import Literal
+import time
+from typing import Any, Literal
+from urllib import error, request
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+
+try:
+    from opentelemetry import trace as trace_api
+    from opentelemetry.trace import Status, StatusCode
+    from phoenix.otel import register
+except ImportError:
+    register = None
+    trace_api = None
+    Status = None
+    StatusCode = None
 
 
 app = FastAPI(title="Motorcycle Claims Workflow API")
@@ -20,6 +34,34 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+PHOENIX_UI_URL = os.getenv("PHOENIX_UI_URL", "http://your-digital-ocean-ip:6006")
+PHOENIX_COLLECTOR_ENDPOINT = os.getenv("PHOENIX_COLLECTOR_ENDPOINT", f"{PHOENIX_UI_URL}/v1/traces")
+PHOENIX_PROJECT_NAME = os.getenv("PHOENIX_PROJECT_NAME", "valon-insurance-claims-demo")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+DEFAULT_LLM_PROVIDER = os.getenv("LLM_PROVIDER", "anthropic")
+DEFAULT_ANTHROPIC_MODEL = os.getenv("CLAUDE_MODEL", os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6"))
+DEFAULT_OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+
+
+def configure_tracer():
+    if register is None:
+        return None
+    try:
+        return register(
+            project_name=PHOENIX_PROJECT_NAME,
+            endpoint=PHOENIX_COLLECTOR_ENDPOINT,
+            protocol="http/protobuf",
+            batch=False,
+        )
+    except Exception:
+        return None
+
+
+TRACER_PROVIDER = configure_tracer()
+TRACER = trace_api.get_tracer("valon.insurance.chat") if trace_api else None
 
 
 Priority = Literal["Low", "Medium", "High"]
@@ -84,6 +126,18 @@ class IntakePayload(BaseModel):
 
 class DocumentUpdate(BaseModel):
     received: bool
+
+
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1)
+
+
+class ChatRequest(BaseModel):
+    messages: list[ChatMessage]
+    claims: list[dict[str, Any]]
+    provider: Literal["anthropic", "openai"] | None = None
+    model: str | None = None
 
 
 def score_triage(injury_involved: bool, vehicle_damage_severity: str) -> tuple[Priority, str]:
@@ -329,3 +383,131 @@ def update_document(claim_id: str, document_key: str, payload: DocumentUpdate) -
         claim["status"] = "Docs Pending"
     return {"claim": claim, "metrics": metrics()}
 
+
+def extract_message_text(content: list[dict[str, Any]]) -> str:
+    text_parts = [item.get("text", "") for item in content if item.get("type") == "text"]
+    return "\n".join(part for part in text_parts if part).strip()
+
+
+def call_anthropic(system_prompt: str, messages: list[dict[str, Any]], model: str) -> tuple[str, dict[str, Any]]:
+    if not ANTHROPIC_API_KEY:
+        raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY is not configured")
+    anthropic_payload = {
+        "model": model,
+        "max_tokens": 700,
+        "system": system_prompt,
+        "messages": messages,
+    }
+    req = request.Request(
+        "https://api.anthropic.com/v1/messages",
+        data=json.dumps(anthropic_payload).encode("utf-8"),
+        headers={
+            "content-type": "application/json",
+            "x-api-key": ANTHROPIC_API_KEY,
+            "anthropic-version": "2023-06-01",
+        },
+        method="POST",
+    )
+    with request.urlopen(req, timeout=60) as response:
+        response_payload = json.loads(response.read().decode("utf-8"))
+    return extract_message_text(response_payload.get("content", [])), response_payload.get("usage", {})
+
+
+def call_openai(system_prompt: str, messages: list[dict[str, Any]], model: str) -> tuple[str, dict[str, Any]]:
+    if not OPENAI_API_KEY:
+        raise HTTPException(status_code=500, detail="OPENAI_API_KEY is not configured")
+    openai_payload = {
+        "model": model,
+        "messages": [{"role": "system", "content": system_prompt}, *messages],
+        "max_tokens": 700,
+    }
+    req = request.Request(
+        "https://api.openai.com/v1/chat/completions",
+        data=json.dumps(openai_payload).encode("utf-8"),
+        headers={
+            "content-type": "application/json",
+            "authorization": f"Bearer {OPENAI_API_KEY}",
+        },
+        method="POST",
+    )
+    with request.urlopen(req, timeout=60) as response:
+        response_payload = json.loads(response.read().decode("utf-8"))
+    choice = response_payload.get("choices", [{}])[0]
+    message = choice.get("message", {}).get("content", "")
+    return message.strip(), response_payload.get("usage", {})
+
+
+@app.post("/api/chat")
+def chat_with_agent(payload: ChatRequest) -> dict[str, object]:
+    claims_json = json.dumps(payload.claims, ensure_ascii=True)
+    provider = payload.provider or DEFAULT_LLM_PROVIDER
+    model = payload.model or (
+        DEFAULT_OPENAI_MODEL if provider == "openai" else DEFAULT_ANTHROPIC_MODEL
+    )
+    system_prompt = (
+        "You are an operations copilot for ValonOS Insurance Claims Module (New Ventures). "
+        "Answer only using the claim dataset provided below. Be concise, precise, and auditable. "
+        "If the answer requires calculation, show the result clearly. "
+        "If data is missing, say so directly.\n\n"
+        f"Current claims dataset JSON:\n{claims_json}"
+    )
+    request_messages = [message.model_dump() for message in payload.messages]
+
+    started = time.perf_counter()
+    span_context = TRACER.start_as_current_span("claude.chat.request") if TRACER is not None else None
+
+    if span_context is None:
+        span = None
+    else:
+        span = span_context.__enter__()
+        span.set_attribute("llm.vendor", provider)
+        span.set_attribute("llm.model", model)
+        span.set_attribute("valon.claim_context_size_bytes", len(claims_json.encode("utf-8")))
+        span.set_attribute("valon.prompt.system", system_prompt)
+        span.set_attribute(
+            "valon.prompt.messages_json",
+            json.dumps(request_messages, ensure_ascii=True),
+        )
+
+    try:
+        if provider == "openai":
+            message, usage = call_openai(system_prompt, request_messages, model)
+        elif provider == "anthropic":
+            message, usage = call_anthropic(system_prompt, request_messages, model)
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported provider: {provider}")
+        latency_ms = int((time.perf_counter() - started) * 1000)
+
+        if span is not None:
+            span.set_attribute("valon.response.text", message)
+            span.set_attribute("valon.latency_ms", latency_ms)
+            span.set_attribute("llm.usage.input_tokens", usage.get("input_tokens", 0))
+            span.set_attribute("llm.usage.output_tokens", usage.get("output_tokens", 0))
+
+        return {
+            "message": message,
+            "usage": usage,
+            "latency_ms": latency_ms,
+            "context_size": len(claims_json),
+            "provider": provider,
+            "model": model,
+        }
+    except error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", "ignore")
+        if span is not None and Status is not None and StatusCode is not None:
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR, detail[:500]))
+        raise HTTPException(status_code=exc.code, detail=detail or "Anthropic API request failed")
+    except Exception as exc:
+        if span is not None and Status is not None and StatusCode is not None:
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR, str(exc)[:500]))
+        raise HTTPException(status_code=500, detail=str(exc))
+    finally:
+        if span_context is not None:
+            span_context.__exit__(None, None, None)
+        if TRACER_PROVIDER is not None:
+            try:
+                TRACER_PROVIDER.force_flush()
+            except Exception:
+                pass
