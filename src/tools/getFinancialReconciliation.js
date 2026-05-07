@@ -1,3 +1,6 @@
+// Production: this would call the real Majesco API via FastAPI proxy
+// Current: returns mock data matching the expected response shape
+
 const FINANCIALS = {
   "CLM-260501": {
     reserveAmount: "$2,750",
@@ -36,7 +39,7 @@ const FINANCIALS = {
   },
 };
 
-export default function getFinancialReconciliation(claimId) {
+export default async function getFinancialReconciliation(claimId) {
   return {
     toolName: "getFinancialReconciliation",
     systemName: "Majesco",

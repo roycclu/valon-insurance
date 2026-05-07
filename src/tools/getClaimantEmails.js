@@ -1,3 +1,6 @@
+// Production: this would call the real Salesforce Service Cloud API via FastAPI proxy
+// Current: returns mock data matching the expected response shape
+
 const EMAIL_THREADS = {
   "CLM-260501": [
     {
@@ -186,7 +189,7 @@ const EMAIL_THREADS = {
   ],
 };
 
-export default function getClaimantEmails(claimId) {
+export default async function getClaimantEmails(claimId) {
   const interactions = EMAIL_THREADS[claimId] ?? [];
   return {
     toolName: "getClaimantEmails",

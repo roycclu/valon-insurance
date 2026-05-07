@@ -1,3 +1,6 @@
+// Production: this would call the real Salesforce Financial Services Cloud API via FastAPI proxy
+// Current: returns mock data matching the expected response shape
+
 const CRM_RECORDS = {
   "CLM-260501": {
     contactInfo: {
@@ -71,7 +74,7 @@ const CRM_RECORDS = {
   },
 };
 
-export default function getCRMProfile(claimId) {
+export default async function getCRMProfile(claimId) {
   return {
     toolName: "getCRMProfile",
     systemName: "Salesforce Financial Services Cloud",

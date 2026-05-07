@@ -1,3 +1,6 @@
+// Production: this would call the real ISO ClaimSearch API via FastAPI proxy
+// Current: returns mock data matching the expected response shape
+
 const FRAUD_RESULTS = {
   "CLM-260501": {
     fraudRiskScore: 11,
@@ -31,7 +34,7 @@ const FRAUD_RESULTS = {
   },
 };
 
-export default function searchFraudDatabase(claimId) {
+export default async function searchFraudDatabase(claimId) {
   return {
     toolName: "searchFraudDatabase",
     systemName: "ISO ClaimSearch",

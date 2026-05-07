@@ -1,3 +1,6 @@
+// Production: this would call the real Guidewire PolicyCenter API via FastAPI proxy
+// Current: returns mock data matching the expected response shape
+
 const POLICY_RECORDS = {
   "CLM-260501": {
     coverageTypes: ["Collision", "Comprehensive", "Uninsured Motorist", "Roadside"],
@@ -51,7 +54,7 @@ const POLICY_RECORDS = {
   },
 };
 
-export default function getPolicyDetails(claimId) {
+export default async function getPolicyDetails(claimId) {
   return {
     toolName: "getPolicyDetails",
     systemName: "Guidewire PolicyCenter",

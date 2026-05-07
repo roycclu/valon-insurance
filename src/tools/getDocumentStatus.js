@@ -1,3 +1,6 @@
+// Production: this would call the real Box API via FastAPI proxy
+// Current: returns mock data matching the expected response shape
+
 const DOCUMENTS = {
   "CLM-260501": [
     { name: "Accident Photos", requested: true, received: true, uploadTimestamp: "2026-05-03T18:14:00Z", pending: false, authenticityFlag: "Verified EXIF metadata" },
@@ -31,7 +34,7 @@ const DOCUMENTS = {
   ],
 };
 
-export default function getDocumentStatus(claimId) {
+export default async function getDocumentStatus(claimId) {
   const docs = DOCUMENTS[claimId] ?? [];
   return {
     toolName: "getDocumentStatus",

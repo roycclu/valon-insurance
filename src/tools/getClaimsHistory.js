@@ -1,3 +1,6 @@
+// Production: this would call the real Guidewire ClaimCenter API via FastAPI proxy
+// Current: returns mock data matching the expected response shape
+
 const CLAIMS_HISTORY = {
   "CLM-260501": [
     { claimId: "CLM-240188", date: "2024-11-12", type: "Parking lot tip-over", payout: "$980", status: "Closed", fraudFlag: false },
@@ -15,7 +18,7 @@ const CLAIMS_HISTORY = {
   ],
 };
 
-export default function getClaimsHistory(claimId) {
+export default async function getClaimsHistory(claimId) {
   const history = CLAIMS_HISTORY[claimId] ?? [];
   return {
     toolName: "getClaimsHistory",
