@@ -591,6 +591,27 @@ h4 {
   padding: 12px 0;
 }
 
+.integration-meta {
+  display: grid;
+  gap: 4px;
+}
+
+.integration-category,
+.integration-description {
+  color: var(--text-dim);
+}
+
+.integration-category {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.integration-description {
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .integration-status {
   gap: 8px;
   text-transform: uppercase;

@@ -1,12 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { buildClaim, buildFinanceView, buildSystemHealth, calculateMetrics, deriveCoverage, derivePriority, nextStage, stageIndex, stageLabel } from "./core/claims";
-import { appendAgentFeed, buildPortfolioContext, buildToolContext, extractReferencedClaims, summarizeToolResult } from "./core/agent";
+import { appendAgentFeed, extractReferencedClaims } from "./core/agent";
 import { MONTHLY_FINANCIALS, combinedRatioTone } from "./core/finance";
 import { buildTasks, documentStatusMissingCount } from "./core/tasks";
 import { NEW_CLAIM_TEMPLATE, SAMPLE_CLAIMS } from "./data/claims";
 import {
   AGENT_FEED_STORAGE_KEY,
-  AGENT_TOOL_RESULTS_STORAGE_KEY,
   CHAT_CONFIG_STORAGE_KEY,
   CHAT_STORAGE_KEY,
   CLAIMS_STORAGE_KEY,
@@ -26,21 +25,11 @@ import {
   providerLabel,
   statusLabel,
 } from "./utils/format";
-import { toolRegistry } from "./tools";
-
-function renderMessageWithBadges(content) {
-  const sourcePattern = /(\[[^\]]+\])/g;
-  const parts = String(content ?? "").split(sourcePattern).filter(Boolean);
-  return parts.map((part, index) =>
-    part.startsWith("[") && part.endsWith("]") ? (
-      <span className="source-badge" key={`${part}-${index}`}>
-        {part.slice(1, -1)}
-      </span>
-    ) : (
-      <span key={`${part.slice(0, 12)}-${index}`}>{part}</span>
-    ),
-  );
-}
+const AGENT_PROMPTS = [
+  "What's blocking the portfolio?",
+  "Show reserve exposure",
+  "High priority actions today",
+];
 
 function App() {
   const [claims, setClaims] = useState([]);
@@ -57,9 +46,8 @@ function App() {
   const [llmProvider, setLlmProvider] = useState("anthropic");
   const [llmModel, setLlmModel] = useState(MODEL_DEFAULTS.anthropic);
   const [configOpen, setConfigOpen] = useState(false);
-  const [contextOpen, setContextOpen] = useState(false);
   const [agentFeed, setAgentFeed] = useState([]);
-  const [toolResultsByClaim, setToolResultsByClaim] = useState({});
+  const chatInputRef = useRef(null);
 
   useEffect(() => {
     const storedClaims = window.localStorage.getItem(CLAIMS_STORAGE_KEY);
@@ -67,7 +55,6 @@ function App() {
     const storedChat = window.localStorage.getItem(CHAT_STORAGE_KEY);
     const storedChatConfig = window.localStorage.getItem(CHAT_CONFIG_STORAGE_KEY);
     const storedFeed = window.localStorage.getItem(AGENT_FEED_STORAGE_KEY);
-    const storedToolResults = window.localStorage.getItem(AGENT_TOOL_RESULTS_STORAGE_KEY);
     const nextClaims = storedClaims ? JSON.parse(storedClaims) : SAMPLE_CLAIMS;
     const nextTasks = storedTasks ? JSON.parse(storedTasks) : {};
     const nextChat = storedChat
@@ -91,8 +78,6 @@ function App() {
             timestamp: "2026-05-07T16:00:00Z",
           },
         ];
-    const nextToolResults = storedToolResults ? JSON.parse(storedToolResults) : {};
-
     const nextProvider = nextChatConfig.provider || "anthropic";
     const providerModels = MODEL_OPTIONS[nextProvider] || MODEL_OPTIONS.anthropic;
     const nextModel = providerModels.includes(nextChatConfig.model) ? nextChatConfig.model : providerModels[0];
@@ -101,7 +86,6 @@ function App() {
     setTaskStatuses(nextTasks);
     setChatMessages(nextChat);
     setAgentFeed(nextFeed);
-    setToolResultsByClaim(nextToolResults);
     setLlmProvider(nextProvider);
     setLlmModel(nextModel);
     setSelectedClaimId(nextClaims[0]?.claimId ?? "");
@@ -135,25 +119,19 @@ function App() {
   }, [agentFeed, hydrated]);
 
   useEffect(() => {
-    if (!hydrated) return;
-    window.localStorage.setItem(AGENT_TOOL_RESULTS_STORAGE_KEY, JSON.stringify(toolResultsByClaim));
-  }, [hydrated, toolResultsByClaim]);
+    if (!chatInputRef.current) return;
+    chatInputRef.current.style.height = "0px";
+    chatInputRef.current.style.height = `${Math.min(chatInputRef.current.scrollHeight, 96)}px`;
+  }, [chatDraft]);
 
   const selectedClaim = useMemo(
     () => claims.find((claim) => claim.claimId === selectedClaimId) ?? null,
     [claims, selectedClaimId],
   );
-  const selectedClaimTools = useMemo(
-    () => (selectedClaim ? toolResultsByClaim[selectedClaim.claimId] ?? {} : {}),
-    [selectedClaim, toolResultsByClaim],
-  );
-
   const metrics = useMemo(() => calculateMetrics(claims), [claims]);
   const finance = useMemo(() => buildFinanceView(claims), [claims]);
   const systemHealth = useMemo(() => buildSystemHealth(INTEGRATIONS), []);
   const tasks = useMemo(() => buildTasks(claims, taskStatuses), [claims, taskStatuses]);
-  const portfolioContext = useMemo(() => buildPortfolioContext(claims), [claims]);
-  const agentToolContext = useMemo(() => buildToolContext(toolResultsByClaim), [toolResultsByClaim]);
   const adjusters = useMemo(
     () => ["All Adjusters", ...new Set(claims.map((claim) => claim.adjusterAssigned).filter(Boolean))],
     [claims],
@@ -269,24 +247,6 @@ function App() {
     });
   };
 
-  const runToolForSelectedClaim = async (tool) => {
-    if (!selectedClaim) return;
-    const result = await tool.run(selectedClaim.claimId);
-    setToolResultsByClaim((current) => ({
-      ...current,
-      [selectedClaim.claimId]: {
-        ...(current[selectedClaim.claimId] ?? {}),
-        [tool.id]: result,
-      },
-    }));
-    pushAgentFeed({
-      title: `Agent called ${tool.id} for ${selectedClaim.claimId} — ${summarizeToolResult(result)}.`,
-      detail: `${result.sourceLabel} responded from ${tool.systemName}.`,
-      claims: [selectedClaim.claimId],
-      timestamp: new Date().toISOString(),
-    });
-  };
-
   const sendChat = async (event) => {
     event.preventDefault();
     const question = chatDraft.trim();
@@ -320,7 +280,6 @@ function App() {
             content: message.content,
           })),
           claims,
-          tool_context: agentToolContext,
           provider: llmProvider,
           model: llmModel,
         }),
@@ -334,7 +293,7 @@ function App() {
         {
           role: "assistant",
           content: payload.message,
-          meta: `${payload.latency_ms} ms · ${payload.usage?.input_tokens ?? 0}/${payload.usage?.output_tokens ?? 0} tokens`,
+          meta: `${payload.latency_ms} ms · ${payload.usage?.input_tokens ?? 0}/${payload.usage?.output_tokens ?? 0} tokens · ${inScopeClaims.length ? inScopeClaims.join(", ") : "portfolio-wide"}`,
         },
       ]);
       pushAgentFeed({
@@ -347,6 +306,17 @@ function App() {
       setChatError(error.message);
     } finally {
       setChatLoading(false);
+    }
+  };
+
+  const handleChatInputChange = (event) => {
+    setChatDraft(event.target.value);
+  };
+
+  const handleChatKeyDown = (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      sendChat(event);
     }
   };
 
@@ -777,81 +747,40 @@ function App() {
                     <h2>Agent Ops</h2>
                     <span>{providerLabel(llmProvider)} · {llmModel}</span>
                   </div>
-                  <button className="context-toggle" onClick={() => setContextOpen((current) => !current)} type="button">
-                    Context loaded · {claims.length} claims in scope {contextOpen ? "−" : "+"}
-                  </button>
-                  {contextOpen ? (
-                    <div className="context-panel">
-                      {portfolioContext.map((claim) => (
-                        <div className="context-row" key={claim.claimId}>
-                          <strong>{claim.claimId}</strong>
-                          <span>
-                            {claim.claimantName} · {claim.assetType} · {stageLabel(claim.stage)} · {claim.adjusterAssigned}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                  <div className="tools-panel">
-                    <div className="section-head">
-                      <h3>Tools</h3>
-                      <span>{selectedClaim ? `Current context: ${selectedClaim.claimId}` : "Select a claim"}</span>
-                    </div>
-                    <div className="tool-card-grid">
-                      {toolRegistry.map((tool) => {
-                        const latestResult = selectedClaim ? selectedClaimTools[tool.id] : null;
-                        return (
-                          <div className="tool-card" key={tool.id}>
-                            <div className="tool-card-head">
-                              <div>
-                                <strong>{tool.id}</strong>
-                                <span>{tool.systemName}</span>
-                              </div>
-                              <span className={`tool-status ${tool.status}`}>
-                                <i />
-                                {tool.status === "mock" ? "mock" : "connected"}
-                              </span>
-                            </div>
-                            <p>{tool.label}</p>
-                            {latestResult ? (
-                              <div className="tool-card-meta">
-                                <span>{latestResult.sourceLabel}</span>
-                                <span>{summarizeToolResult(latestResult)}</span>
-                              </div>
-                            ) : (
-                              <div className="tool-card-meta">
-                                <span>No result cached</span>
-                                <span>Run against current claim</span>
-                              </div>
-                            )}
-                            <button className="secondary-button" onClick={() => runToolForSelectedClaim(tool)} type="button">
-                              Run
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
+                  <div className="scope-pill">{claims.length} claims in scope</div>
                   <div className="agent-chat-panel">
                     <div className="agent-chat-history">
                       {chatMessages.map((message, index) => (
                         <div className={`chat-bubble ${message.role}`} key={`${message.role}-${index}`}>
-                          <strong>{message.role === "assistant" ? "Agent" : "User"}</strong>
-                          <p>{renderMessageWithBadges(message.content)}</p>
+                          <p>
+                            {message.role === "assistant" ? <span className="agent-dot" aria-hidden="true">●</span> : null}
+                            {message.content}
+                          </p>
                           {message.meta ? <span>{message.meta}</span> : null}
                         </div>
                       ))}
                       {chatLoading ? <div className="typing-indicator">{providerLabel(llmProvider)} is reviewing the full claims portfolio...</div> : null}
                     </div>
                     {chatError ? <div className="chat-error">{chatError}</div> : null}
-                    <form className="chat-form" onSubmit={sendChat}>
+                    <div className="prompt-pill-row">
+                      {AGENT_PROMPTS.map((prompt) => (
+                        <button className="prompt-pill" key={prompt} onClick={() => setChatDraft(prompt)} type="button">
+                          {prompt}
+                        </button>
+                      ))}
+                    </div>
+                    <form className="chat-inline-form" onSubmit={sendChat}>
                       <textarea
-                        placeholder="Ask about the full claims portfolio, or run tools and ask about CRM, policy, claim history, reserves, documents, or fraud signals."
+                        ref={chatInputRef}
+                        className="chat-inline-input"
+                        rows={1}
+                        placeholder="Ask about blockers, exposure, or next actions."
                         value={chatDraft}
-                        onChange={(event) => setChatDraft(event.target.value)}
+                        onChange={handleChatInputChange}
+                        onKeyDown={handleChatKeyDown}
                       />
-                      <button className="action-button" type="submit">
-                        Send
+                      <button className="chat-send-button" type="submit">
+                        →
                       </button>
                     </form>
                   </div>
@@ -887,8 +816,10 @@ function App() {
             <div className="integration-list">
               {INTEGRATIONS.map((integration) => (
                 <div className="integration-row" key={integration.name}>
-                  <div>
+                  <div className="integration-meta">
                     <strong>{integration.name}</strong>
+                    <span className="integration-category">{integration.category}</span>
+                    <span className="integration-description">{integration.description}</span>
                   </div>
                   <span className={`integration-status ${integration.status}`}>
                     <i />
@@ -911,8 +842,10 @@ function App() {
               <div className="chat-messages">
                 {chatMessages.map((message, index) => (
                   <div className={`chat-bubble ${message.role}`} key={`${message.role}-${index}`}>
-                    <strong>{message.role === "assistant" ? "Agent" : "User"}</strong>
-                    <p>{renderMessageWithBadges(message.content)}</p>
+                    <p>
+                      {message.role === "assistant" ? <span className="agent-dot" aria-hidden="true">●</span> : null}
+                      {message.content}
+                    </p>
                     {message.meta ? <span>{message.meta}</span> : null}
                   </div>
                 ))}
@@ -982,8 +915,10 @@ function App() {
           <div className="config-integration-list">
             {INTEGRATIONS.map((integration) => (
               <div className="config-integration-row" key={integration.name}>
-                <div>
+                <div className="integration-meta">
                   <strong>{integration.name}</strong>
+                  <span className="integration-category">{integration.category}</span>
+                  <span className="integration-description">{integration.description}</span>
                   <span className={`integration-status ${integration.status}`}>
                     <i />
                     {statusLabel(integration.status)} · Last checked {integration.lastChecked}

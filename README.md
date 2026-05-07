@@ -81,6 +81,47 @@ This is the adjudicator-facing reasoning layer. It injects live claim context, p
 
 This module makes AI usable in a regulated workflow. Every call gets traced, every decision stays inspectable, and supervisors can review what context the model saw, what it returned, and how it behaved over time. That is the difference between an AI demo and an AI system you can actually operate.
 
+## Agent & Tool Architecture
+
+```text
+┌─────────────────────────────────┐
+│         Adjuster Input          │
+└────────────────┬────────────────┘
+                 ↓
+┌─────────────────────────────────┐
+│       ValonOS Agent Core        │
+│  ● Context: Active NY Claims    │
+│  ● Provider: Anthropic / Claude │
+│  ● Memory: Session              │
+└────────────────┬────────────────┘
+                 ↓
+┌─────────────────────────────────┐
+│          Tool Router            │
+└──┬──────┬──────┬──────┬─────┬──┘
+   ↓      ↓      ↓      ↓     ↓
+┌────┐ ┌──────┐ ┌──────┐ ┌───┐ ┌──────┐
+│CRM │ │Policy│ │Claims│ │Doc│ │Fraud │
+│    │ │Admin │ │Hist. │ │   │ │Check │
+│SF  │ │Guide-│ │Guide-│ │Box│ │ISO   │
+│FSC │ │wire  │ │wire  │ │   │ │Claim │
+│    │ │Policy│ │Claim │ │   │ │Search│
+└────┘ └──────┘ └──────┘ └───┘ └──────┘
+                 ↓
+┌─────────────────────────────────┐
+│       Structured Response       │
+│  ● Claim references             │
+│  ● Risk flags                   │
+│  ● Recommended next actions     │
+└────────────────┬────────────────┘
+                 ↓
+┌─────────────────────────────────┐
+│      Adjuster Workstation       │
+│  Claims · Tasks · Finance · AI  │
+└─────────────────────────────────┘
+```
+
+**Production path:** Agent Core → FastAPI backend → real tool APIs. Current demo calls mock tool modules locally and passes the results into the chat backend as structured context.
+
 ## Current vs Planned Integrations
 
 | Current | Planned |
