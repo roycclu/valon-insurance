@@ -40,6 +40,35 @@ const INTEGRATIONS = [
   { name: "State Regulators", status: "pending" },
 ];
 
+const FINANCE_METRICS = {
+  premiumsWritten: 2400000,
+  premiumsEarned: 1800000,
+  claimsIncurred: 640000,
+  claimsReserved: 280000,
+  lossRatio: 35.6,
+  expenseRatio: 18.2,
+  combinedRatio: 53.8,
+  averageClaimSeverity: 8200,
+  averagePremiumPerPolicy: 680,
+  policiesInForce: 3529,
+  claimsFrequency: 4.2,
+};
+
+const MONTHLY_FINANCIALS = [
+  { month: "Nov", premiums: 280000, claims: 92000 },
+  { month: "Dec", premiums: 295000, claims: 101000 },
+  { month: "Jan", premiums: 305000, claims: 109000 },
+  { month: "Feb", premiums: 292000, claims: 98000 },
+  { month: "Mar", premiums: 318000, claims: 116000 },
+  { month: "Apr", premiums: 310000, claims: 124000 },
+];
+
+const RESERVE_BY_PRIORITY = {
+  high: 15000,
+  medium: 6000,
+  low: 2000,
+};
+
 const POLICY_DETAILS = {
   "MC-204812": {
     policyType: "RoadShield Plus",
@@ -247,6 +276,28 @@ function formatDateTime(value) {
   });
 }
 
+function formatCurrency(value) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function formatPercent(value) {
+  return `${value.toFixed(1)}%`;
+}
+
+function formatInteger(value) {
+  return new Intl.NumberFormat("en-US").format(value);
+}
+
+function combinedRatioTone(value) {
+  if (value < 60) return "good";
+  if (value <= 90) return "warning";
+  return "critical";
+}
+
 function buildClaim(input, existing = {}) {
   const now = new Date().toISOString();
   const triage = derivePriority(input);
@@ -297,6 +348,29 @@ function calculateAverageStageHours(claims, stage) {
     return sum + Math.max(1, (updated - created) / (1000 * 60 * 60));
   }, 0);
   return (totalHours / stageClaims.length).toFixed(1);
+}
+
+function buildFinanceView(claims) {
+  const openClaims = claims.filter((claim) => !claim.closed);
+  const reserveByPriority = Object.entries(RESERVE_BY_PRIORITY).map(([priority, averageReserve]) => {
+    const openCount = openClaims.filter((claim) => claim.priority === priority).length;
+    return {
+      priority,
+      openCount,
+      averageReserve,
+      totalReserve: openCount * averageReserve,
+    };
+  });
+  const totalReserveRequirement = reserveByPriority.reduce((sum, tier) => sum + tier.totalReserve, 0);
+  const reserveCoverageRatio = totalReserveRequirement
+    ? FINANCE_METRICS.claimsReserved / totalReserveRequirement
+    : 0;
+  return {
+    ...FINANCE_METRICS,
+    reserveByPriority,
+    totalReserveRequirement,
+    reserveCoverageRatio,
+  };
 }
 
 function buildTaskId(claim, title) {
@@ -400,6 +474,7 @@ function App() {
   );
 
   const metrics = useMemo(() => calculateMetrics(claims), [claims]);
+  const finance = useMemo(() => buildFinanceView(claims), [claims]);
   const tasks = useMemo(() => buildTasks(claims, taskStatuses), [claims, taskStatuses]);
   const adjusters = useMemo(
     () => ["All Adjusters", ...new Set(claims.map((claim) => claim.adjusterAssigned).filter(Boolean))],
@@ -576,6 +651,13 @@ function App() {
           >
             Dashboard
           </button>
+          <button
+            className={`tab-button ${activeTab === "finance" ? "active" : ""}`}
+            onClick={() => setActiveTab("finance")}
+            type="button"
+          >
+            Finance View
+          </button>
         </div>
         <button className="action-button" onClick={createClaim} type="button">
           New Claim
@@ -649,6 +731,89 @@ function App() {
                     );
                   })}
                 </svg>
+              </div>
+            </section>
+          ) : null}
+
+          {activeTab === "finance" ? (
+            <section className="screen-panel">
+              <div className="section-head">
+                <h2>Finance View</h2>
+                <span>CFO and BizOps snapshot</span>
+              </div>
+              <div className="metrics-grid finance-metrics-grid">
+                <MetricCard
+                  label="Combined Ratio"
+                  value={formatPercent(finance.combinedRatio)}
+                  tone={combinedRatioTone(finance.combinedRatio)}
+                  detail="Under 100% indicates underwriting profitability"
+                />
+                <MetricCard
+                  label="Loss Ratio"
+                  value={formatPercent(finance.lossRatio)}
+                  tone="good"
+                  detail={`${formatPercent(finance.claimsFrequency)} claims frequency`}
+                />
+                <MetricCard
+                  label="Premiums Earned"
+                  value={formatCurrency(finance.premiumsEarned)}
+                  detail={`${formatCurrency(finance.averagePremiumPerPolicy)} avg premium per policy`}
+                />
+                <MetricCard
+                  label="Claims Incurred"
+                  value={formatCurrency(finance.claimsIncurred)}
+                  detail={`${formatCurrency(finance.averageClaimSeverity)} avg claim severity`}
+                />
+              </div>
+              <div className="finance-grid">
+                <div className="chart-panel">
+                  <div className="chart-header">
+                    <h3>Monthly Premiums vs Claims</h3>
+                    <span>Last 6 months</span>
+                  </div>
+                  <FinancialBarChart data={MONTHLY_FINANCIALS} />
+                </div>
+                <div className="chart-panel">
+                  <div className="chart-header">
+                    <h3>Reserve Adequacy</h3>
+                    <span>Open claims reserve model</span>
+                  </div>
+                  <div className="reserve-list">
+                    {finance.reserveByPriority.map((tier) => (
+                      <div className="reserve-row" key={tier.priority}>
+                        <div>
+                          <strong>{capitalize(tier.priority)} Priority</strong>
+                          <span>
+                            {formatInteger(tier.openCount)} open claims · {formatCurrency(tier.averageReserve)} avg reserve
+                          </span>
+                        </div>
+                        <strong>{formatCurrency(tier.totalReserve)}</strong>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="reserve-total">
+                    <KeyValue label="Total Reserve Requirement" value={formatCurrency(finance.totalReserveRequirement)} />
+                    <KeyValue label="Claims Reserved" value={formatCurrency(finance.claimsReserved)} />
+                    <KeyValue
+                      label="Reserve Coverage"
+                      value={`${finance.reserveCoverageRatio.toFixed(1)}x modeled open-claim need`}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="finance-summary-grid">
+                <div className="summary-block">
+                  <h3>Loss Ratio Trend</h3>
+                  <p>Loss ratio is holding at {formatPercent(finance.lossRatio)}, which keeps claims cost well below earned premium and leaves room for growth.</p>
+                </div>
+                <div className="summary-block">
+                  <h3>Reserve Coverage</h3>
+                  <p>Booked reserves of {formatCurrency(finance.claimsReserved)} sit well above the modeled {formatCurrency(finance.totalReserveRequirement)} open-claim requirement, which gives the team cushion against severity drift.</p>
+                </div>
+                <div className="summary-block">
+                  <h3>Profitability Outlook</h3>
+                  <p>At a {formatPercent(finance.combinedRatio)} combined ratio, this book looks profitable today and disciplined enough to scale without eating margin.</p>
+                </div>
               </div>
             </section>
           ) : null}
@@ -1032,13 +1197,42 @@ function KeyValue({ label, value }) {
   );
 }
 
-function MetricCard({ label, value }) {
+function MetricCard({ label, value, tone = "", detail = "" }) {
   return (
-    <div className="metric-card">
+    <div className={`metric-card ${tone}`.trim()}>
       <span>{label}</span>
       <strong>{value}</strong>
+      {detail ? <p>{detail}</p> : null}
     </div>
   );
+}
+
+function FinancialBarChart({ data }) {
+  const maxValue = Math.max(...data.flatMap((item) => [item.premiums, item.claims]), 1);
+  return (
+    <svg className="finance-chart" viewBox="0 0 620 260" role="img" aria-label="Monthly premiums versus claims">
+      {data.map((item, index) => {
+        const premiumHeight = (item.premiums / maxValue) * 150;
+        const claimHeight = (item.claims / maxValue) * 150;
+        const groupX = 44 + index * 92;
+        return (
+          <g key={item.month}>
+            <rect x={groupX} y={188 - premiumHeight} width="28" height={premiumHeight} rx="4" fill="#3D7A52" />
+            <rect x={groupX + 34} y={188 - claimHeight} width="28" height={claimHeight} rx="4" fill="#C8922A" />
+            <text x={groupX + 31} y={216} textAnchor="middle" fill="#7A756E" fontSize="12">
+              {item.month}
+            </text>
+          </g>
+        );
+      })}
+      <text x="44" y="238" fill="#7A756E" fontSize="12">Green = Premiums</text>
+      <text x="180" y="238" fill="#7A756E" fontSize="12">Amber = Claims</text>
+    </svg>
+  );
+}
+
+function capitalize(value) {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 export default App;
