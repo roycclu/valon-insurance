@@ -677,18 +677,18 @@ function App() {
       <section className="toolbar">
         <div className="tab-strip">
           <button
-            className={`tab-button ${activeTab === "claim" ? "active" : ""}`}
-            onClick={() => setActiveTab("claim")}
-            type="button"
-          >
-            Claim Detail
-          </button>
-          <button
             className={`tab-button ${activeTab === "tasks" ? "active" : ""}`}
             onClick={() => setActiveTab("tasks")}
             type="button"
           >
             My Tasks
+          </button>
+          <button
+            className={`tab-button ${activeTab === "claim" ? "active" : ""}`}
+            onClick={() => setActiveTab("claim")}
+            type="button"
+          >
+            Claim Detail
           </button>
           <button
             className={`tab-button ${activeTab === "dashboard" ? "active" : ""}`}
