@@ -90,7 +90,6 @@ textarea {
 }
 
 .kicker,
-.masthead-meta,
 .section-head span,
 .claim-row-meta,
 .key-value-row span,
@@ -103,7 +102,9 @@ textarea {
 .task-main span,
 .chat-bubble span,
 .typing-indicator,
-.obs-badge {
+.obs-badge,
+.config-integration-row span,
+.system-health-card p {
   color: var(--text-dim);
 }
 
@@ -139,21 +140,17 @@ h4 {
   font-size: clamp(22px, 3vw, 36px);
 }
 
-.masthead-meta {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  align-items: center;
-  text-transform: uppercase;
-  font-size: 12px;
-}
-
-.obs-badge {
+.settings-button {
   border: 1px solid var(--line);
-  background: #ffffff;
-  padding: 8px 10px;
-  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #8B857D;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  box-shadow: var(--shadow);
 }
 
 .toolbar {
@@ -339,6 +336,59 @@ h4 {
   margin-top: 8px;
   font-size: 28px;
   font-family: "Playfair Display", Georgia, serif;
+}
+
+.system-health-card {
+  border: 1px solid var(--line);
+  background: #ffffff;
+  padding: 14px 16px;
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.system-health-card h3 {
+  margin-bottom: 6px;
+}
+
+.system-health-card p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.system-health-stats {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.health-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.health-chip.connected {
+  background: #E8F4ED;
+  color: var(--green);
+}
+
+.health-chip.pending {
+  background: #FBF2E0;
+  color: var(--amber);
+}
+
+.health-chip.not-configured {
+  background: #F0EEEA;
+  color: #7A756E;
 }
 
 .metric-card p {
@@ -548,6 +598,10 @@ h4 {
   color: var(--yellow);
 }
 
+.integration-status.not-configured {
+  color: #8E8A84;
+}
+
 .task-toolbar {
   display: flex;
   gap: 12px;
@@ -709,10 +763,109 @@ h4 {
   gap: 10px;
 }
 
-.chat-config-grid {
+.config-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 26, 26, 0.22);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  z-index: 20;
+}
+
+.config-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.config-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: min(420px, 100vw);
+  height: 100vh;
+  background: #FAF7F2;
+  border-left: 1px solid var(--line);
+  box-shadow: -8px 0 24px rgba(44, 42, 39, 0.12);
+  padding: 20px;
+  transform: translateX(100%);
+  transition: transform 0.24s ease;
+  z-index: 21;
+  overflow-y: auto;
+}
+
+.config-drawer.open {
+  transform: translateX(0);
+}
+
+.config-header,
+.config-integration-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.config-header {
+  margin-bottom: 20px;
+}
+
+.config-close,
+.configure-link {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.config-close {
+  color: #8B857D;
+  font-size: 28px;
+  line-height: 1;
+}
+
+.config-section {
+  border: 1px solid var(--line);
+  background: #ffffff;
+  padding: 16px;
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  margin-bottom: 16px;
+}
+
+.config-section h3 {
+  margin-bottom: 14px;
+}
+
+.config-grid {
   display: grid;
-  grid-template-columns: 140px minmax(0, 1fr);
-  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.config-integration-list {
+  display: grid;
+  gap: 12px;
+}
+
+.config-integration-row {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.config-integration-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.config-integration-row div {
+  display: grid;
+  gap: 4px;
+}
+
+.configure-link {
+  color: var(--amber);
+  padding: 0;
+  text-decoration: underline;
 }
 
 @media (max-width: 1180px) {
@@ -729,7 +882,8 @@ h4 {
   .metrics-grid,
   .detail-grid,
   .finance-grid,
-  .finance-summary-grid {
+  .finance-summary-grid,
+  .config-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -743,7 +897,10 @@ h4 {
   .toolbar,
   .detail-head,
   .resolution-actions,
-  .task-row {
+  .task-row,
+  .system-health-card,
+  .config-header,
+  .config-integration-row {
     display: grid;
     gap: 12px;
   }
@@ -752,9 +909,9 @@ h4 {
   .detail-grid,
   .progress-strip,
   .form-grid,
-  .chat-config-grid,
   .finance-grid,
-  .finance-summary-grid {
+  .finance-summary-grid,
+  .config-grid {
     grid-template-columns: 1fr;
   }
 
@@ -762,5 +919,9 @@ h4 {
     left: 12px;
     right: 12px;
     width: auto;
+  }
+
+  .config-drawer {
+    width: 100vw;
   }
 }

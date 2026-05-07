@@ -4,10 +4,14 @@ const CLAIMS_STORAGE_KEY = "valon-claims-data-v3";
 const TASKS_STORAGE_KEY = "valon-claims-tasks-v1";
 const CHAT_STORAGE_KEY = "valon-claims-chat-v1";
 const CHAT_CONFIG_STORAGE_KEY = "valon-claims-chat-config-v1";
-const MODEL_DEFAULTS = {
-  anthropic: "claude-sonnet-4-6",
-  openai: "gpt-4.1-mini",
+const MODEL_OPTIONS = {
+  anthropic: ["claude-sonnet-4-6", "claude-opus-4-6", "claude-haiku-4-5"],
+  openai: ["gpt-5", "gpt-4o", "gpt-4o-mini"],
+  google: ["gemini-2.5-pro", "gemini-2.5-flash"],
 };
+const MODEL_DEFAULTS = Object.fromEntries(
+  Object.entries(MODEL_OPTIONS).map(([provider, models]) => [provider, models[0]]),
+);
 
 const STAGES = [
   { id: "fnol", label: "FNOL Intake" },
@@ -33,11 +37,13 @@ const TASK_TEMPLATES = {
 };
 
 const INTEGRATIONS = [
-  { name: "Policy Admin", status: "connected" },
-  { name: "Repair Network", status: "connected" },
-  { name: "Medical Providers", status: "pending" },
-  { name: "Finance / Reserves", status: "connected" },
-  { name: "State Regulators", status: "pending" },
+  { name: "Policy Admin System", status: "connected", lastChecked: "May 07, 2026 09:12 UTC" },
+  { name: "Repair Network API", status: "connected", lastChecked: "May 07, 2026 09:10 UTC" },
+  { name: "Medical Providers", status: "pending", lastChecked: "May 07, 2026 08:54 UTC" },
+  { name: "Finance / Reserves", status: "connected", lastChecked: "May 07, 2026 09:08 UTC" },
+  { name: "State Regulatory Reporting", status: "pending", lastChecked: "May 07, 2026 08:48 UTC" },
+  { name: "Reinsurer Notifications", status: "not-configured", lastChecked: "Not checked" },
+  { name: "Arize Phoenix (Observability)", status: "not-configured", lastChecked: "Not checked" },
 ];
 
 const FINANCE_METRICS = {
@@ -298,6 +304,15 @@ function combinedRatioTone(value) {
   return "critical";
 }
 
+function providerLabel(value) {
+  return value === "openai" ? "OpenAI" : value === "google" ? "Google" : "Anthropic";
+}
+
+function statusLabel(value) {
+  if (value === "not-configured") return "Not configured";
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
 function buildClaim(input, existing = {}) {
   const now = new Date().toISOString();
   const triage = derivePriority(input);
@@ -373,6 +388,23 @@ function buildFinanceView(claims) {
   };
 }
 
+function buildSystemHealth(integrations) {
+  const counts = integrations.reduce(
+    (accumulator, integration) => {
+      accumulator[integration.status] += 1;
+      return accumulator;
+    },
+    { connected: 0, pending: 0, "not-configured": 0 },
+  );
+  let overallStatus = "Operational";
+  if (counts.connected === 0 && counts.pending === 0) {
+    overallStatus = "Not Configured";
+  } else if (counts.pending > 0 || counts["not-configured"] > 0) {
+    overallStatus = "Degraded";
+  }
+  return { counts, overallStatus };
+}
+
 function buildTaskId(claim, title) {
   return `${claim.claimId}:${claim.stage}:${title}`;
 }
@@ -415,6 +447,7 @@ function App() {
   const [chatError, setChatError] = useState("");
   const [llmProvider, setLlmProvider] = useState("anthropic");
   const [llmModel, setLlmModel] = useState(MODEL_DEFAULTS.anthropic);
+  const [configOpen, setConfigOpen] = useState(false);
 
   useEffect(() => {
     const storedClaims = window.localStorage.getItem(CLAIMS_STORAGE_KEY);
@@ -438,8 +471,13 @@ function App() {
     setClaims(nextClaims);
     setTaskStatuses(nextTasks);
     setChatMessages(nextChat);
-    setLlmProvider(nextChatConfig.provider || "anthropic");
-    setLlmModel(nextChatConfig.model || MODEL_DEFAULTS[nextChatConfig.provider] || MODEL_DEFAULTS.anthropic);
+    const nextProvider = nextChatConfig.provider || "anthropic";
+    const providerModels = MODEL_OPTIONS[nextProvider] || MODEL_OPTIONS.anthropic;
+    const nextModel = providerModels.includes(nextChatConfig.model)
+      ? nextChatConfig.model
+      : providerModels[0];
+    setLlmProvider(nextProvider);
+    setLlmModel(nextModel);
     setSelectedClaimId(nextClaims[0]?.claimId ?? "");
     setSelectedAdjuster(nextClaims[0]?.adjusterAssigned ?? "All Adjusters");
     setHydrated(true);
@@ -475,6 +513,7 @@ function App() {
 
   const metrics = useMemo(() => calculateMetrics(claims), [claims]);
   const finance = useMemo(() => buildFinanceView(claims), [claims]);
+  const systemHealth = useMemo(() => buildSystemHealth(INTEGRATIONS), []);
   const tasks = useMemo(() => buildTasks(claims, taskStatuses), [claims, taskStatuses]);
   const adjusters = useMemo(
     () => ["All Adjusters", ...new Set(claims.map((claim) => claim.adjusterAssigned).filter(Boolean))],
@@ -558,6 +597,10 @@ function App() {
     event.preventDefault();
     const question = chatDraft.trim();
     if (!question || chatLoading) return;
+    if (llmProvider === "google") {
+      setChatError("Google models are available in configuration, but this demo API only wires Anthropic and OpenAI chat providers.");
+      return;
+    }
     const nextMessages = [...chatMessages, { role: "user", content: question }];
     setChatMessages(nextMessages);
     setChatDraft("");
@@ -621,11 +664,14 @@ function App() {
             <h1>ValonOS — Motorcycle Insurance</h1>
           </div>
         </div>
-        <div className="masthead-meta">
-          <span>React workstation</span>
-          <span>localStorage persistence</span>
-          <span className="obs-badge">Observability Dashboard</span>
-        </div>
+        <button
+          aria-label="Open configuration"
+          className="settings-button"
+          onClick={() => setConfigOpen(true)}
+          type="button"
+        >
+          ⚙
+        </button>
       </header>
 
       <section className="toolbar">
@@ -707,6 +753,19 @@ function App() {
                 <MetricCard label="Average Cycle Time" value={`${metrics.averageCycleTime} days`} />
                 <MetricCard label="Escalation Rate" value={`${metrics.escalationRate}%`} />
                 <MetricCard label="Average Triage Time" value={`${metrics.avgTriageHours} hrs`} />
+              </div>
+              <div className="system-health-card">
+                <div>
+                  <h3>System Health</h3>
+                  <p>{systemHealth.overallStatus}</p>
+                </div>
+                <div className="system-health-stats">
+                  <span className="health-chip connected">{systemHealth.counts.connected} connected</span>
+                  <span className="health-chip pending">{systemHealth.counts.pending} pending</span>
+                  <span className="health-chip not-configured">
+                    {systemHealth.counts["not-configured"]} not configured
+                  </span>
+                </div>
               </div>
               <div className="chart-panel">
                 <div className="chart-header">
@@ -1139,30 +1198,12 @@ function App() {
                   {message.meta ? <span>{message.meta}</span> : null}
                 </div>
               ))}
-              {chatLoading ? <div className="typing-indicator">Claude is reviewing claims context...</div> : null}
+              {chatLoading ? (
+                <div className="typing-indicator">{providerLabel(llmProvider)} is reviewing claims context...</div>
+              ) : null}
             </div>
             {chatError ? <div className="chat-error">{chatError}</div> : null}
             <form className="chat-form" onSubmit={sendChat}>
-              <div className="chat-config-grid">
-                <label className="inline-field">
-                  <span>LLM Provider</span>
-                  <select
-                    value={llmProvider}
-                    onChange={(event) => {
-                      const provider = event.target.value;
-                      setLlmProvider(provider);
-                      setLlmModel(MODEL_DEFAULTS[provider]);
-                    }}
-                  >
-                    <option value="anthropic">Anthropic</option>
-                    <option value="openai">OpenAI</option>
-                  </select>
-                </label>
-                <label className="inline-field">
-                  <span>Model</span>
-                  <input value={llmModel} onChange={(event) => setLlmModel(event.target.value)} />
-                </label>
-              </div>
               <textarea
                 placeholder="Ask about overdue claims, missing documents, priorities, or stage timing."
                 value={chatDraft}
@@ -1175,6 +1216,83 @@ function App() {
           </div>
         ) : null}
       </section>
+
+      <div
+        aria-hidden={!configOpen}
+        className={`config-overlay ${configOpen ? "open" : ""}`}
+        onClick={() => setConfigOpen(false)}
+      />
+      <aside className={`config-drawer ${configOpen ? "open" : ""}`} role="dialog" aria-label="Configuration">
+        <div className="config-header">
+          <div>
+            <p className="kicker">Settings</p>
+            <h2>Configuration</h2>
+          </div>
+          <button aria-label="Close configuration" className="config-close" onClick={() => setConfigOpen(false)} type="button">
+            ×
+          </button>
+        </div>
+
+        <section className="config-section">
+          <h3>AI Settings</h3>
+          <div className="config-grid">
+            <label className="inline-field">
+              <span>LLM Provider</span>
+              <select
+                value={llmProvider}
+                onChange={(event) => {
+                  const provider = event.target.value;
+                  setLlmProvider(provider);
+                  setLlmModel(MODEL_DEFAULTS[provider]);
+                }}
+              >
+                <option value="anthropic">Anthropic</option>
+                <option value="openai">OpenAI</option>
+                <option value="google">Google</option>
+              </select>
+            </label>
+            <label className="inline-field">
+              <span>Model</span>
+              <select value={llmModel} onChange={(event) => setLlmModel(event.target.value)}>
+                {MODEL_OPTIONS[llmProvider].map((model) => (
+                  <option key={model} value={model}>
+                    {model}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <section className="config-section">
+          <h3>Integration Health</h3>
+          <div className="config-integration-list">
+            {INTEGRATIONS.map((integration) => (
+              <div className="config-integration-row" key={integration.name}>
+                <div>
+                  <strong>{integration.name}</strong>
+                  <span className={`integration-status ${integration.status}`}>
+                    <i />
+                    {statusLabel(integration.status)} · Last checked {integration.lastChecked}
+                  </span>
+                </div>
+                <button className="configure-link" type="button">
+                  Configure
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="config-section">
+          <h3>System Info</h3>
+          <div className="key-value-list">
+            <KeyValue label="Persistence" value="Browser localStorage" />
+            <KeyValue label="Environment" value="Demo" />
+            <KeyValue label="Version" value="0.1.0" />
+          </div>
+        </section>
+      </aside>
     </div>
   );
 }
