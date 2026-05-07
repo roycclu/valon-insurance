@@ -4,7 +4,6 @@ const CLAIMS_STORAGE_KEY = "valon-claims-data-v3";
 const TASKS_STORAGE_KEY = "valon-claims-tasks-v1";
 const CHAT_STORAGE_KEY = "valon-claims-chat-v1";
 const CHAT_CONFIG_STORAGE_KEY = "valon-claims-chat-config-v1";
-const PHOENIX_UI_URL = "http://your-digital-ocean-ip:6006";
 const MODEL_DEFAULTS = {
   anthropic: "claude-sonnet-4-6",
   openai: "gpt-4.1-mini",
@@ -531,14 +530,26 @@ function App() {
   return (
     <div className="workspace">
       <header className="masthead">
-        <div>
-          <p className="kicker">ValonOS</p>
-          <h1>Insurance Claims Module (New Ventures)</h1>
+        <div className="masthead-brand">
+          <svg className="brand-mark" width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <line x1="17" y1="2" x2="17" y2="32" stroke="#C8922A" strokeWidth="2.5" strokeLinecap="round"/>
+            <line x1="2" y1="17" x2="32" y2="17" stroke="#C8922A" strokeWidth="2.5" strokeLinecap="round"/>
+            <line x1="6.51" y1="6.51" x2="27.49" y2="27.49" stroke="#C8922A" strokeWidth="2.5" strokeLinecap="round"/>
+            <line x1="27.49" y1="6.51" x2="6.51" y2="27.49" stroke="#C8922A" strokeWidth="2.5" strokeLinecap="round"/>
+            <line x1="3.76" y1="11.5" x2="30.24" y2="22.5" stroke="#C8922A" strokeWidth="1.5" strokeLinecap="round"/>
+            <line x1="11.5" y1="3.76" x2="22.5" y2="30.24" stroke="#C8922A" strokeWidth="1.5" strokeLinecap="round"/>
+            <line x1="30.24" y1="11.5" x2="3.76" y2="22.5" stroke="#C8922A" strokeWidth="1.5" strokeLinecap="round"/>
+            <line x1="22.5" y1="3.76" x2="11.5" y2="30.24" stroke="#C8922A" strokeWidth="1.5" strokeLinecap="round"/>
+          </svg>
+          <div>
+            <p className="kicker">Claims Management</p>
+            <h1>ValonOS — Motorcycle Insurance</h1>
+          </div>
         </div>
         <div className="masthead-meta">
           <span>React workstation</span>
           <span>localStorage persistence</span>
-          <span className="obs-badge">Observability · {PHOENIX_UI_URL}</span>
+          <span className="obs-badge">Observability Dashboard</span>
         </div>
       </header>
 
@@ -627,11 +638,11 @@ function App() {
                     const y = 180 - barHeight;
                     return (
                       <g key={stage.id}>
-                        <rect x={x} y={y} width="68" height={barHeight} fill="#1a2b4a" />
-                        <text x={x + 34} y={198} textAnchor="middle" fill="#5f6f86" fontSize="12">
+                        <rect x={x} y={y} width="68" height={barHeight} fill="#2C2A27" />
+                        <text x={x + 34} y={198} textAnchor="middle" fill="#7A756E" fontSize="12">
                           {stage.label}
                         </text>
-                        <text x={x + 34} y={y - 8} textAnchor="middle" fill="#14233a" fontSize="14">
+                        <text x={x + 34} y={y - 8} textAnchor="middle" fill="#1A1A1A" fontSize="14">
                           {value}
                         </text>
                       </g>
