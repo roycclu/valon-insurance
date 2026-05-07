@@ -136,6 +136,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     messages: list[ChatMessage]
     claims: list[dict[str, Any]]
+    tool_context: dict[str, Any] | None = None
     provider: Literal["anthropic", "openai"] | None = None
     model: str | None = None
 
@@ -445,6 +446,7 @@ def call_openai(system_prompt: str, messages: list[dict[str, Any]], model: str) 
 @app.post("/api/chat")
 def chat_with_agent(payload: ChatRequest) -> dict[str, object]:
     claims_json = json.dumps(payload.claims, ensure_ascii=True)
+    tool_context_json = json.dumps(payload.tool_context or {}, ensure_ascii=True)
     provider = payload.provider or DEFAULT_LLM_PROVIDER
     model = payload.model or (
         DEFAULT_OPENAI_MODEL if provider == "openai" else DEFAULT_ANTHROPIC_MODEL
@@ -453,8 +455,10 @@ def chat_with_agent(payload: ChatRequest) -> dict[str, object]:
         "You are an operations copilot for ValonOS Insurance Claims Module (New Ventures). "
         "Answer only using the claim dataset provided below. Be concise, precise, and auditable. "
         "If the answer requires calculation, show the result clearly. "
-        "If data is missing, say so directly.\n\n"
-        f"Current claims dataset JSON:\n{claims_json}"
+        "If data is missing, say so directly. "
+        "When you reference facts from tool outputs, include an inline source badge like [Salesforce FSC] or [Guidewire ClaimCenter].\n\n"
+        f"Current claims dataset JSON:\n{claims_json}\n\n"
+        f"Executed tool context JSON:\n{tool_context_json}"
     )
     request_messages = [message.model_dump() for message in payload.messages]
 
@@ -468,6 +472,7 @@ def chat_with_agent(payload: ChatRequest) -> dict[str, object]:
         span.set_attribute("llm.vendor", provider)
         span.set_attribute("llm.model", model)
         span.set_attribute("valon.claim_context_size_bytes", len(claims_json.encode("utf-8")))
+        span.set_attribute("valon.tool_context_size_bytes", len(tool_context_json.encode("utf-8")))
         span.set_attribute("valon.prompt.system", system_prompt)
         span.set_attribute(
             "valon.prompt.messages_json",
@@ -494,6 +499,7 @@ def chat_with_agent(payload: ChatRequest) -> dict[str, object]:
             "usage": usage,
             "latency_ms": latency_ms,
             "context_size": len(claims_json),
+            "tool_context_size": len(tool_context_json),
             "provider": provider,
             "model": model,
         }

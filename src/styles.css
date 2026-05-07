@@ -849,6 +849,79 @@ h4 {
   gap: 10px;
 }
 
+.tools-panel {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.tool-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.tool-card {
+  border: 1px solid var(--line);
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.tool-card-head,
+.tool-card-meta,
+.tool-status {
+  display: flex;
+  align-items: center;
+}
+
+.tool-card-head,
+.tool-card-meta {
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tool-card-head div {
+  display: grid;
+  gap: 4px;
+}
+
+.tool-card-head span,
+.tool-card p,
+.tool-card-meta span {
+  color: var(--text-dim);
+}
+
+.tool-card p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.tool-status {
+  gap: 8px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.tool-status i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  display: inline-block;
+}
+
+.tool-status.connected {
+  color: #3d7a52;
+}
+
+.tool-status.mock {
+  color: #c8922a;
+}
+
 .context-row {
   display: grid;
   gap: 4px;
@@ -901,6 +974,20 @@ h4 {
 .detail-section p {
   margin: 0;
   line-height: 1.5;
+}
+
+.source-badge {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #f5f0e8;
+  color: #7b5a18;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .activity-item small {
@@ -1046,7 +1133,8 @@ h4 {
   .finance-grid,
   .finance-summary-grid,
   .config-grid,
-  .agent-layout {
+  .agent-layout,
+  .tool-card-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1080,7 +1168,8 @@ h4 {
   .finance-grid,
   .finance-summary-grid,
   .config-grid,
-  .agent-layout {
+  .agent-layout,
+  .tool-card-grid {
     grid-template-columns: 1fr;
   }
 

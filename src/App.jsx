@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import { toolRegistry } from "./tools";
 
 const CLAIMS_STORAGE_KEY = "valon-claims-data-v4";
 const TASKS_STORAGE_KEY = "valon-claims-tasks-v2";
 const CHAT_STORAGE_KEY = "valon-claims-chat-v2";
 const CHAT_CONFIG_STORAGE_KEY = "valon-claims-chat-config-v1";
 const AGENT_FEED_STORAGE_KEY = "valon-agent-feed-v1";
+const AGENT_TOOL_RESULTS_STORAGE_KEY = "valon-agent-tool-results-v1";
 
 const MODEL_OPTIONS = {
   anthropic: ["claude-sonnet-4-6", "claude-opus-4-6", "claude-haiku-4-5"],
@@ -675,6 +677,43 @@ function buildTasks(claims, taskStatuses) {
     });
 }
 
+function summarizeToolResult(result) {
+  if (!result) return "returned 0 results";
+  if (Array.isArray(result.data)) {
+    return `returned ${result.data.length} ${result.data.length === 1 ? "result" : "results"}`;
+  }
+  return `returned ${result.resultCount ?? 1} ${(result.resultCount ?? 1) === 1 ? "result" : "results"}`;
+}
+
+function buildToolContext(toolResultsByClaim) {
+  const context = {};
+  Object.entries(toolResultsByClaim).forEach(([claimId, tools]) => {
+    const entries = Object.entries(tools || {});
+    if (!entries.length) return;
+    context[claimId] = entries.map(([toolId, result]) => ({
+      toolId,
+      sourceLabel: result.sourceLabel,
+      systemName: result.systemName,
+      data: result.data,
+    }));
+  });
+  return context;
+}
+
+function renderMessageWithBadges(content) {
+  const sourcePattern = /(\[[^\]]+\])/g;
+  const parts = String(content ?? "").split(sourcePattern).filter(Boolean);
+  return parts.map((part, index) =>
+    part.startsWith("[") && part.endsWith("]") ? (
+      <span className="source-badge" key={`${part}-${index}`}>
+        {part.slice(1, -1)}
+      </span>
+    ) : (
+      <span key={`${part.slice(0, 12)}-${index}`}>{part}</span>
+    ),
+  );
+}
+
 function App() {
   const [claims, setClaims] = useState([]);
   const [hydrated, setHydrated] = useState(false);
@@ -692,6 +731,7 @@ function App() {
   const [configOpen, setConfigOpen] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
   const [agentFeed, setAgentFeed] = useState([]);
+  const [toolResultsByClaim, setToolResultsByClaim] = useState({});
 
   useEffect(() => {
     const storedClaims = window.localStorage.getItem(CLAIMS_STORAGE_KEY);
@@ -699,6 +739,7 @@ function App() {
     const storedChat = window.localStorage.getItem(CHAT_STORAGE_KEY);
     const storedChatConfig = window.localStorage.getItem(CHAT_CONFIG_STORAGE_KEY);
     const storedFeed = window.localStorage.getItem(AGENT_FEED_STORAGE_KEY);
+    const storedToolResults = window.localStorage.getItem(AGENT_TOOL_RESULTS_STORAGE_KEY);
     const nextClaims = storedClaims ? JSON.parse(storedClaims) : SAMPLE_CLAIMS;
     const nextTasks = storedTasks ? JSON.parse(storedTasks) : {};
     const nextChat = storedChat
@@ -722,6 +763,7 @@ function App() {
             timestamp: "2026-05-07T16:00:00Z",
           },
         ];
+    const nextToolResults = storedToolResults ? JSON.parse(storedToolResults) : {};
 
     const nextProvider = nextChatConfig.provider || "anthropic";
     const providerModels = MODEL_OPTIONS[nextProvider] || MODEL_OPTIONS.anthropic;
@@ -731,6 +773,7 @@ function App() {
     setTaskStatuses(nextTasks);
     setChatMessages(nextChat);
     setAgentFeed(nextFeed);
+    setToolResultsByClaim(nextToolResults);
     setLlmProvider(nextProvider);
     setLlmModel(nextModel);
     setSelectedClaimId(nextClaims[0]?.claimId ?? "");
@@ -763,15 +806,25 @@ function App() {
     window.localStorage.setItem(AGENT_FEED_STORAGE_KEY, JSON.stringify(agentFeed));
   }, [agentFeed, hydrated]);
 
+  useEffect(() => {
+    if (!hydrated) return;
+    window.localStorage.setItem(AGENT_TOOL_RESULTS_STORAGE_KEY, JSON.stringify(toolResultsByClaim));
+  }, [hydrated, toolResultsByClaim]);
+
   const selectedClaim = useMemo(
     () => claims.find((claim) => claim.claimId === selectedClaimId) ?? null,
     [claims, selectedClaimId],
+  );
+  const selectedClaimTools = useMemo(
+    () => (selectedClaim ? toolResultsByClaim[selectedClaim.claimId] ?? {} : {}),
+    [selectedClaim, toolResultsByClaim],
   );
 
   const metrics = useMemo(() => calculateMetrics(claims), [claims]);
   const finance = useMemo(() => buildFinanceView(claims), [claims]);
   const systemHealth = useMemo(() => buildSystemHealth(INTEGRATIONS), []);
   const tasks = useMemo(() => buildTasks(claims, taskStatuses), [claims, taskStatuses]);
+  const agentToolContext = useMemo(() => buildToolContext(toolResultsByClaim), [toolResultsByClaim]);
   const adjusters = useMemo(
     () => ["All Adjusters", ...new Set(claims.map((claim) => claim.adjusterAssigned).filter(Boolean))],
     [claims],
@@ -887,6 +940,24 @@ function App() {
     });
   };
 
+  const runToolForSelectedClaim = (tool) => {
+    if (!selectedClaim) return;
+    const result = tool.run(selectedClaim.claimId);
+    setToolResultsByClaim((current) => ({
+      ...current,
+      [selectedClaim.claimId]: {
+        ...(current[selectedClaim.claimId] ?? {}),
+        [tool.id]: result,
+      },
+    }));
+    pushAgentFeed({
+      title: `Agent called ${tool.id} for ${selectedClaim.claimId} — ${summarizeToolResult(result)}.`,
+      detail: `${result.sourceLabel} responded from ${tool.systemName}.`,
+      claims: [selectedClaim.claimId],
+      timestamp: new Date().toISOString(),
+    });
+  };
+
   const sendChat = async (event) => {
     event.preventDefault();
     const question = chatDraft.trim();
@@ -920,6 +991,7 @@ function App() {
             content: message.content,
           })),
           claims,
+          tool_context: agentToolContext,
           provider: llmProvider,
           model: llmModel,
         }),
@@ -981,6 +1053,9 @@ function App() {
           <button className={`tab-button ${activeTab === "tasks" ? "active" : ""}`} onClick={() => setActiveTab("tasks")} type="button">
             My Tasks
           </button>
+          <button className={`tab-button ${activeTab === "agent" ? "active" : ""}`} onClick={() => setActiveTab("agent")} type="button">
+            Agent Ops
+          </button>
           <button className={`tab-button ${activeTab === "claim" ? "active" : ""}`} onClick={() => setActiveTab("claim")} type="button">
             Claim Detail
           </button>
@@ -989,9 +1064,6 @@ function App() {
           </button>
           <button className={`tab-button ${activeTab === "finance" ? "active" : ""}`} onClick={() => setActiveTab("finance")} type="button">
             Finance View
-          </button>
-          <button className={`tab-button ${activeTab === "agent" ? "active" : ""}`} onClick={() => setActiveTab("agent")} type="button">
-            Agent Ops
           </button>
         </div>
         <button className="action-button" onClick={createClaim} type="button">
@@ -1391,12 +1463,52 @@ function App() {
                       ))}
                     </div>
                   ) : null}
+                  <div className="tools-panel">
+                    <div className="section-head">
+                      <h3>Tools</h3>
+                      <span>{selectedClaim ? `Current context: ${selectedClaim.claimId}` : "Select a claim"}</span>
+                    </div>
+                    <div className="tool-card-grid">
+                      {toolRegistry.map((tool) => {
+                        const latestResult = selectedClaim ? selectedClaimTools[tool.id] : null;
+                        return (
+                          <div className="tool-card" key={tool.id}>
+                            <div className="tool-card-head">
+                              <div>
+                                <strong>{tool.id}</strong>
+                                <span>{tool.systemName}</span>
+                              </div>
+                              <span className={`tool-status ${tool.status}`}>
+                                <i />
+                                {tool.status === "mock" ? "mock" : "connected"}
+                              </span>
+                            </div>
+                            <p>{tool.label}</p>
+                            {latestResult ? (
+                              <div className="tool-card-meta">
+                                <span>{latestResult.sourceLabel}</span>
+                                <span>{summarizeToolResult(latestResult)}</span>
+                              </div>
+                            ) : (
+                              <div className="tool-card-meta">
+                                <span>No result cached</span>
+                                <span>Run against current claim</span>
+                              </div>
+                            )}
+                            <button className="secondary-button" onClick={() => runToolForSelectedClaim(tool)} type="button">
+                              Run
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                   <div className="agent-chat-panel">
                     <div className="agent-chat-history">
                       {chatMessages.map((message, index) => (
                         <div className={`chat-bubble ${message.role}`} key={`${message.role}-${index}`}>
                           <strong>{message.role === "assistant" ? "Agent" : "User"}</strong>
-                          <p>{message.content}</p>
+                          <p>{renderMessageWithBadges(message.content)}</p>
                           {message.meta ? <span>{message.meta}</span> : null}
                         </div>
                       ))}
@@ -1405,7 +1517,7 @@ function App() {
                     {chatError ? <div className="chat-error">{chatError}</div> : null}
                     <form className="chat-form" onSubmit={sendChat}>
                       <textarea
-                        placeholder="Ask about the full claims portfolio, blockers, coverage risks, reserve exposure, or next-step recommendations."
+                        placeholder="Ask about the full claims portfolio, or run tools and ask about CRM, policy, claim history, reserves, documents, or fraud signals."
                         value={chatDraft}
                         onChange={(event) => setChatDraft(event.target.value)}
                       />
@@ -1471,7 +1583,7 @@ function App() {
                 {chatMessages.map((message, index) => (
                   <div className={`chat-bubble ${message.role}`} key={`${message.role}-${index}`}>
                     <strong>{message.role === "assistant" ? "Agent" : "User"}</strong>
-                    <p>{message.content}</p>
+                    <p>{renderMessageWithBadges(message.content)}</p>
                     {message.meta ? <span>{message.meta}</span> : null}
                   </div>
                 ))}
