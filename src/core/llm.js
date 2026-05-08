@@ -1,5 +1,6 @@
 // Direct browser-to-LLM callers — no backend required.
-// Keys are read from Vite env vars (VITE_ANTHROPIC_API_KEY, VITE_OPENAI_API_KEY).
+// Keys are read from .env via import.meta.env (ANTHROPIC_API_KEY, OPENAI_API_KEY).
+// vite.config.js sets envPrefix to expose those names to the browser bundle.
 // NOTE: keys are visible in the browser for anyone who inspects network traffic.
 // This is acceptable for a local demo; do not deploy to a public URL with real keys.
 
@@ -12,8 +13,8 @@ const TRACE_LIMIT = 50;
 // ---------- Anthropic ----------
 
 export async function callAnthropic({ model, systemPrompt, messages }) {
-  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error("VITE_ANTHROPIC_API_KEY is not set in .env");
+  const apiKey = import.meta.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not set in .env");
 
   const t0 = performance.now();
   const response = await fetch(ANTHROPIC_ENDPOINT, {
@@ -55,8 +56,8 @@ export async function callAnthropic({ model, systemPrompt, messages }) {
 // ---------- OpenAI ----------
 
 export async function callOpenAI({ model, systemPrompt, messages }) {
-  const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-  if (!apiKey) throw new Error("VITE_OPENAI_API_KEY is not set in .env");
+  const apiKey = import.meta.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error("OPENAI_API_KEY is not set in .env");
 
   const t0 = performance.now();
   const response = await fetch(OPENAI_ENDPOINT, {
