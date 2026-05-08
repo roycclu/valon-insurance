@@ -377,7 +377,7 @@ function App() {
   const coverage = selectedClaim ? deriveCoverage(selectedClaim) : null;
 
   return (
-    <div className="workspace">
+    <div className="workspace" data-tab={activeTab}>
       <header className="masthead">
         <div className="masthead-brand">
           <svg className="brand-mark" width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">

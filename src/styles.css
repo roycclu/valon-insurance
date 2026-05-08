@@ -1194,6 +1194,79 @@ h4 {
   text-decoration: underline;
 }
 
+/* ===== Agent Ops: viewport-locked three-column layout ===== */
+
+/* Lock the page to the viewport when Agent Ops is active.
+   Other tabs are unaffected — they keep their natural scroll. */
+
+.workspace[data-tab="agent"] {
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* .layout fills all remaining vertical space */
+.workspace[data-tab="agent"] .layout {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* main-panel is the single grid cell inside .layout.agent-mode */
+.workspace[data-tab="agent"] .main-panel {
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* agent-screen overrides the generic min-height: 720px on .screen-panel */
+.workspace[data-tab="agent"] .agent-screen {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* agent-layout overrides its own min-height: 780px */
+.workspace[data-tab="agent"] .agent-layout {
+  height: 100%;
+  min-height: 0;
+}
+
+/* Each column becomes a vertical flex container */
+.workspace[data-tab="agent"] .agent-sidebar,
+.workspace[data-tab="agent"] .agent-chat-shell,
+.workspace[data-tab="agent"] .agent-activity-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Claims queue + tasks stack scrolls as a unit */
+.workspace[data-tab="agent"] .agent-stack {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Chat panel fills remaining height in the chat column;
+   overrides its min-height: 620px */
+.workspace[data-tab="agent"] .agent-chat-panel {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Chat history scrolls within the grid row */
+.workspace[data-tab="agent"] .agent-chat-history {
+  overflow-y: auto;
+}
+
+/* Activity feed scrolls within the right column */
+.workspace[data-tab="agent"] .activity-feed {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 @media (max-width: 1180px) {
   .layout {
     grid-template-columns: 1fr;
