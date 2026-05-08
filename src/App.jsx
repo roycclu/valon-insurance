@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildClaim, buildFinanceView, buildSystemHealth, calculateMetrics, deriveCoverage, derivePriority, nextStage, stageIndex, stageLabel } from "./core/claims";
 import { appendAgentFeed, extractReferencedClaims } from "./core/agent";
+import { callAnthropic, callOpenAI, logTrace } from "./core/llm";
 import { MONTHLY_FINANCIALS, combinedRatioTone } from "./core/finance";
 import { buildTasks, documentStatusMissingCount } from "./core/tasks";
 import { NEW_CLAIM_TEMPLATE, SAMPLE_CLAIMS } from "./data/claims";
@@ -278,12 +279,37 @@ function App() {
     });
   };
 
+  const buildSystemPrompt = () => {
+    const claimsJson = JSON.stringify(claims, null, 0);
+    return [
+      "You are a senior claims adjudication assistant for ValonOS Specialty Insurance.",
+      "You support adjusters handling real claims for real people going through difficult moments.",
+      "",
+      "Tone: empathetic toward claimants, professional with adjusters.",
+      "When a claim involves injury, legal exposure, or financial hardship, acknowledge the human stakes.",
+      "When giving operational guidance, be direct, specific, and action-oriented.",
+      "",
+      "Always reference specific claim IDs, claimant names, dollar amounts, and dates.",
+      "Structure responses clearly — key facts first, recommended action second, risks flagged last.",
+      "If something is legally or financially sensitive, say so explicitly.",
+      "Never hedge without explaining why. Never give generic advice.",
+      "",
+      "For portfolio questions: total exposure, priority ranking, top blockers.",
+      "For individual claims: stage, blocker, next action, human context.",
+      "For financial questions: calculate from claims data, show your work briefly.",
+      "",
+      "Answer only using the claim dataset provided below. If data is missing, say so directly.",
+      "",
+      `Current claims dataset JSON:\n${claimsJson}`,
+    ].join("\n");
+  };
+
   const sendChat = async (event) => {
     event.preventDefault();
     const question = chatDraft.trim();
     if (!question || chatLoading) return;
     if (llmProvider === "google") {
-      setChatError("Google models are available in configuration, but this demo API only wires Anthropic and OpenAI chat providers.");
+      setChatError("Google is available in settings but not wired for direct browser calls yet. Switch to Anthropic or OpenAI.");
       return;
     }
 
@@ -302,36 +328,32 @@ function App() {
     });
 
     try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: nextMessages.map((message) => ({
-            role: message.role,
-            content: message.content,
-          })),
-          claims,
-          provider: llmProvider,
-          model: llmModel,
-        }),
-      });
-      const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload.detail || "Chat request failed.");
-      }
+      const systemPrompt = buildSystemPrompt();
+      const callArgs = { model: llmModel, systemPrompt, messages: nextMessages };
+      const result = llmProvider === "openai"
+        ? await callOpenAI(callArgs)
+        : await callAnthropic(callArgs);
+
       setChatMessages((current) => [
         ...current,
         {
           role: "assistant",
-          content: payload.message,
-          meta: `${payload.latency_ms} ms · ${payload.usage?.input_tokens ?? 0}/${payload.usage?.output_tokens ?? 0} tokens · ${inScopeClaims.length ? inScopeClaims.join(", ") : "portfolio-wide"}`,
+          content: result.text,
+          meta: `${result.latencyMs} ms · ${result.usage.input_tokens}/${result.usage.output_tokens} tokens · ${inScopeClaims.length ? inScopeClaims.join(", ") : "portfolio-wide"}`,
         },
       ]);
       pushAgentFeed({
         title: "Agent recommendation returned",
-        detail: payload.message,
+        detail: result.text,
         claims: inScopeClaims.length ? inScopeClaims : claims.map((claim) => claim.claimId),
         timestamp: new Date().toISOString(),
+      });
+      logTrace({
+        provider: llmProvider,
+        model: llmModel,
+        promptSnippet: question,
+        responseSnippet: result.text,
+        latencyMs: result.latencyMs,
       });
     } catch (error) {
       setChatError(error.message);
