@@ -78,6 +78,7 @@ function App() {
   const [agentFeed, setAgentFeed] = useState([]);
   const chatInputRef = useRef(null);
   const chatHistoryRef = useRef(null);
+  const chatDockRef = useRef(null);
 
   useEffect(() => {
     const storedClaims = window.localStorage.getItem(CLAIMS_STORAGE_KEY);
@@ -161,6 +162,11 @@ function App() {
     if (activeTab !== "agent" || !chatHistoryRef.current) return;
     chatHistoryRef.current.scrollTop = chatHistoryRef.current.scrollHeight;
   }, [activeTab, chatMessages]);
+
+  useEffect(() => {
+    if (!chatOpen || !chatDockRef.current) return;
+    chatDockRef.current.scrollTop = chatDockRef.current.scrollHeight;
+  }, [chatOpen, chatMessages]);
 
   const selectedClaim = useMemo(
     () => claims.find((claim) => claim.claimId === selectedClaimId) ?? null,
@@ -948,7 +954,7 @@ function App() {
           </button>
           {chatOpen ? (
             <div className="chat-panel">
-              <div className="chat-messages">
+              <div className="chat-messages" ref={chatDockRef}>
                 {chatMessages.map((message, index) => (
                   <div className={`chat-bubble ${message.role}`} key={`${message.role}-${index}`}>
                     <div className="chat-message-meta">
