@@ -68,15 +68,17 @@ export async function callOpenAI({ model, systemPrompt, messages }) {
     },
     body: JSON.stringify({
       model,
+      system: systemPrompt,
       // gpt-5 and other reasoning models require max_completion_tokens and
       // need extra budget for reasoning tokens; other models use max_tokens.
       ...(model.startsWith("gpt-5") || model.startsWith("o1") || model.startsWith("o3")
         ? { max_completion_tokens: 2000 }
         : { max_tokens: 1000 }),
-      messages: [
-        { role: "system", content: systemPrompt },
-        ...messages.map((m) => ({ role: m.role, content: m.content })),
-      ],
+      // Only user/assistant turns — system lives in the top-level field above.
+      // Filter out assistant messages with empty content to avoid API errors.
+      messages: messages
+        .filter((m) => !(m.role === "assistant" && !String(m.content ?? "").trim()))
+        .map((m) => ({ role: m.role, content: m.content })),
     }),
   });
 

@@ -7,7 +7,7 @@ export const AGENT_TOOL_RESULTS_STORAGE_KEY = "valon-agent-tool-results-v1";
 
 export const MODEL_OPTIONS = {
   anthropic: ["claude-sonnet-4-6", "claude-opus-4-6", "claude-haiku-4-5"],
-  openai: ["gpt-5", "gpt-4o", "gpt-4o-mini"],
+  openai: ["gpt-4o", "gpt-4o-mini", "gpt-5"],
   google: ["gemini-2.5-pro", "gemini-2.5-flash"],
 };
 
