@@ -113,7 +113,7 @@ function App() {
         ];
     const nextProvider = nextChatConfig.provider || "anthropic";
     const providerModels = MODEL_OPTIONS[nextProvider] || MODEL_OPTIONS.anthropic;
-    const nextModel = providerModels.includes(nextChatConfig.model) ? nextChatConfig.model : providerModels[0];
+    const nextModel = providerModels.includes(nextChatConfig.model) ? nextChatConfig.model : MODEL_DEFAULTS[nextProvider];
 
     setClaims(nextClaims);
     setTaskStatuses(nextTasks);
@@ -335,7 +335,7 @@ function App() {
     const question = chatDraft.trim();
     if (!question || chatLoading) return;
     if (llmProvider === "google") {
-      setChatError("Google is available in settings but not wired for direct browser calls yet. Switch to Anthropic or OpenAI.");
+      setChatError("Google is not wired for direct browser calls yet. Switch to Anthropic or OpenAI.");
       return;
     }
 
@@ -1014,7 +1014,7 @@ function App() {
           <h3>AI Settings</h3>
           <div className="config-grid">
             <label className="inline-field">
-              <span>LLM Provider</span>
+              <span>Provider</span>
               <select
                 value={llmProvider}
                 onChange={(event) => {
