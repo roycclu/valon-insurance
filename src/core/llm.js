@@ -1,29 +1,18 @@
-// Direct browser-to-LLM callers — no backend required.
-// Keys are read from .env via import.meta.env (ANTHROPIC_API_KEY, OPENAI_API_KEY).
-// vite.config.js sets envPrefix to expose those names to the browser bundle.
-// NOTE: keys are visible in the browser for anyone who inspects network traffic.
-// This is acceptable for a local demo; do not deploy to a public URL with real keys.
+// Anthropic calls are proxied through /api/chat (Vercel serverless) — key stays server-side.
+// OpenAI calls remain direct browser-to-API (key read from import.meta.env).
 
-const ANTHROPIC_ENDPOINT = "https://api.anthropic.com/v1/messages";
 const OPENAI_ENDPOINT = "https://api.openai.com/v1/chat/completions";
 
 const TRACE_KEY = "valon-agent-traces-v1";
 const TRACE_LIMIT = 50;
 
-// ---------- Anthropic ----------
+// ---------- Anthropic (via /api/chat proxy) ----------
 
 export async function callAnthropic({ model, systemPrompt, messages }) {
-  const apiKey = import.meta.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not set in .env");
-
   const t0 = performance.now();
-  const response = await fetch(ANTHROPIC_ENDPOINT, {
+  const response = await fetch("/api/chat", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       model,
       max_tokens: 1024,
@@ -39,22 +28,16 @@ export async function callAnthropic({ model, systemPrompt, messages }) {
 
   const data = await response.json();
   if (!response.ok) {
-    throw new Error(data.error?.message || `Anthropic error ${response.status}`);
+    throw new Error(data.error || `Proxy error ${response.status}`);
   }
 
-  const text = (data.content ?? [])
-    .filter((b) => b.type === "text")
-    .map((b) => b.text)
-    .join("\n")
-    .trim();
-
   return {
-    text: text || "Response incomplete — please try again.",
+    text: data.message,
     usage: {
       input_tokens: data.usage?.input_tokens ?? 0,
       output_tokens: data.usage?.output_tokens ?? 0,
     },
-    latencyMs: Math.round(performance.now() - t0),
+    latencyMs: data.latency_ms ?? Math.round(performance.now() - t0),
   };
 }
 
