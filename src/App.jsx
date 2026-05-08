@@ -444,7 +444,7 @@ function App() {
             Finance View
           </button>
         </div>
-        <button className="action-button" onClick={createClaim} type="button">
+        <button className="action-button" disabled type="button">
           New Claim
         </button>
       </section>
