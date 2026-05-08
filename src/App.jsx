@@ -77,6 +77,7 @@ function App() {
   const [configOpen, setConfigOpen] = useState(false);
   const [agentFeed, setAgentFeed] = useState([]);
   const chatInputRef = useRef(null);
+  const chatHistoryRef = useRef(null);
 
   useEffect(() => {
     const storedClaims = window.localStorage.getItem(CLAIMS_STORAGE_KEY);
@@ -155,6 +156,11 @@ function App() {
     chatInputRef.current.style.height = "0px";
     chatInputRef.current.style.height = `${Math.min(chatInputRef.current.scrollHeight, 96)}px`;
   }, [chatDraft]);
+
+  useEffect(() => {
+    if (activeTab !== "agent" || !chatHistoryRef.current) return;
+    chatHistoryRef.current.scrollTop = chatHistoryRef.current.scrollHeight;
+  }, [activeTab, chatMessages]);
 
   const selectedClaim = useMemo(
     () => claims.find((claim) => claim.claimId === selectedClaimId) ?? null,
@@ -822,7 +828,7 @@ function App() {
                   </div>
                   <div className="scope-pill">{claims.length} claims in scope</div>
                   <div className="agent-chat-panel">
-                    <div className="agent-chat-history">
+                    <div className="agent-chat-history" ref={chatHistoryRef}>
                       {chatMessages.map((message, index) => (
                         <div className={`chat-bubble ${message.role}`} key={`${message.role}-${index}`}>
                           <div className="chat-message-meta">
