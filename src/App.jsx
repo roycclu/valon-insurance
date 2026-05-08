@@ -31,6 +31,34 @@ const AGENT_PROMPTS = [
   "High priority actions today",
 ];
 
+// Safely extract a display string from a message content value.
+// Handles plain strings, Claude content-block arrays [{type:"text",text:"..."}],
+// and any other unexpected value that might end up in localStorage.
+function safeText(content) {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .filter((block) => block?.type === "text")
+      .map((block) => block?.text ?? "")
+      .join("\n");
+  }
+  return "";
+}
+
+function SunburstIcon() {
+  return (
+    <svg className="agent-avatar-icon" viewBox="0 0 12 12" aria-hidden="true">
+      <circle cx="6" cy="6" r="2.2" fill="currentColor" />
+      <path
+        d="M6 0.9v1.5M6 9.6v1.5M0.9 6h1.5M9.6 6h1.5M2.1 2.1l1.1 1.1M8.8 8.8l1.1 1.1M9.9 2.1L8.8 3.2M3.2 8.8L2.1 9.9"
+        stroke="currentColor"
+        strokeWidth="0.95"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 function App() {
   const [claims, setClaims] = useState([]);
   const [hydrated, setHydrated] = useState(false);
@@ -58,7 +86,10 @@ function App() {
     const nextClaims = storedClaims ? JSON.parse(storedClaims) : SAMPLE_CLAIMS;
     const nextTasks = storedTasks ? JSON.parse(storedTasks) : {};
     const nextChat = storedChat
-      ? JSON.parse(storedChat)
+      ? JSON.parse(storedChat).map((msg) => ({
+          ...msg,
+          content: safeText(msg.content),
+        }))
       : [
           {
             role: "assistant",
@@ -752,14 +783,35 @@ function App() {
                     <div className="agent-chat-history">
                       {chatMessages.map((message, index) => (
                         <div className={`chat-bubble ${message.role}`} key={`${message.role}-${index}`}>
-                          <p>
-                            {message.role === "assistant" ? <span className="agent-dot" aria-hidden="true">●</span> : null}
-                            {message.content}
-                          </p>
+                          <div className="chat-message-meta">
+                            {message.role === "assistant" ? (
+                              <>
+                                <span className="chat-avatar agent-avatar">
+                                  <SunburstIcon />
+                                </span>
+                                <strong className="chat-meta-label">AI</strong>
+                              </>
+                            ) : (
+                              <>
+                                <span className="chat-avatar user-avatar" />
+                                <strong className="chat-meta-label">You</strong>
+                              </>
+                            )}
+                          </div>
+                          <p>{safeText(message.content)}</p>
                           {message.meta ? <span>{message.meta}</span> : null}
                         </div>
                       ))}
-                      {chatLoading ? <div className="typing-indicator">{providerLabel(llmProvider)} is reviewing the full claims portfolio...</div> : null}
+                      {chatLoading ? (
+                        <div className="typing-indicator">
+                          <div className="typing-dots" aria-hidden="true">
+                            <span />
+                            <span />
+                            <span />
+                          </div>
+                          <span>AI is thinking...</span>
+                        </div>
+                      ) : null}
                     </div>
                     {chatError ? <div className="chat-error">{chatError}</div> : null}
                     <div className="prompt-pill-row">
@@ -774,13 +826,22 @@ function App() {
                         ref={chatInputRef}
                         className="chat-inline-input"
                         rows={1}
-                        placeholder="Ask about blockers, exposure, or next actions."
+                        placeholder="Ask about blockers, exposure, or next actions..."
                         value={chatDraft}
                         onChange={handleChatInputChange}
                         onKeyDown={handleChatKeyDown}
                       />
-                      <button className="chat-send-button" type="submit">
-                        →
+                      <button aria-label="Send message" className="chat-send-button" type="submit">
+                        <svg viewBox="0 0 16 16" aria-hidden="true">
+                          <path
+                            d="M3 8h8.2M8.4 3.4 13 8l-4.6 4.6"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.6"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
                       </button>
                     </form>
                   </div>
@@ -797,7 +858,7 @@ function App() {
                         <strong>{item.title}</strong>
                         <span>{formatDateTime(item.timestamp)}</span>
                         <p>{item.detail}</p>
-                        <small>{item.claims.join(", ")}</small>
+                        <small>{(item.claims ?? []).map((c) => typeof c === "string" ? c : (c?.claimId ?? "")).join(", ")}</small>
                       </div>
                     ))}
                   </div>
@@ -842,19 +903,41 @@ function App() {
               <div className="chat-messages">
                 {chatMessages.map((message, index) => (
                   <div className={`chat-bubble ${message.role}`} key={`${message.role}-${index}`}>
-                    <p>
-                      {message.role === "assistant" ? <span className="agent-dot" aria-hidden="true">●</span> : null}
-                      {message.content}
-                    </p>
+                    <div className="chat-message-meta">
+                      {message.role === "assistant" ? (
+                        <>
+                          <span className="chat-avatar agent-avatar">
+                            <SunburstIcon />
+                          </span>
+                          <strong className="chat-meta-label">AI</strong>
+                        </>
+                      ) : (
+                        <>
+                          <span className="chat-avatar user-avatar" />
+                          <strong className="chat-meta-label">You</strong>
+                        </>
+                      )}
+                    </div>
+                    <p>{safeText(message.content)}</p>
                     {message.meta ? <span>{message.meta}</span> : null}
                   </div>
                 ))}
-                {chatLoading ? <div className="typing-indicator">{providerLabel(llmProvider)} is reviewing claims context...</div> : null}
+                {chatLoading ? (
+                  <div className="typing-indicator">
+                    <div className="typing-dots" aria-hidden="true">
+                      <span />
+                      <span />
+                      <span />
+                    </div>
+                    <span>AI is thinking...</span>
+                  </div>
+                ) : null}
               </div>
               {chatError ? <div className="chat-error">{chatError}</div> : null}
               <form className="chat-form" onSubmit={sendChat}>
                 <textarea
-                  placeholder="Ask about overdue claims, missing documents, priorities, or stage timing."
+                  onKeyDown={handleChatKeyDown}
+                  placeholder="Ask about blockers, exposure, or next actions..."
                   value={chatDraft}
                   onChange={(event) => setChatDraft(event.target.value)}
                 />
