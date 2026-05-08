@@ -44,7 +44,7 @@ export async function callAnthropic({ model, systemPrompt, messages }) {
     .trim();
 
   return {
-    text,
+    text: text || "Response incomplete — please try again.",
     usage: {
       input_tokens: data.usage?.input_tokens ?? 0,
       output_tokens: data.usage?.output_tokens ?? 0,
@@ -68,7 +68,11 @@ export async function callOpenAI({ model, systemPrompt, messages }) {
     },
     body: JSON.stringify({
       model,
-      max_completion_tokens: 1024,
+      // gpt-5 and other reasoning models require max_completion_tokens and
+      // need extra budget for reasoning tokens; other models use max_tokens.
+      ...(model.startsWith("gpt-5") || model.startsWith("o1") || model.startsWith("o3")
+        ? { max_completion_tokens: 2000 }
+        : { max_tokens: 1000 }),
       messages: [
         { role: "system", content: systemPrompt },
         ...messages.map((m) => ({ role: m.role, content: m.content })),
@@ -84,7 +88,7 @@ export async function callOpenAI({ model, systemPrompt, messages }) {
   const text = (data.choices?.[0]?.message?.content ?? "").trim();
 
   return {
-    text,
+    text: text || "Response incomplete — please try again.",
     usage: {
       input_tokens: data.usage?.prompt_tokens ?? 0,
       output_tokens: data.usage?.completion_tokens ?? 0,

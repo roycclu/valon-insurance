@@ -280,27 +280,47 @@ function App() {
   };
 
   const buildSystemPrompt = () => {
-    const claimsJson = JSON.stringify(claims, null, 0);
+    const today = new Date().toLocaleDateString("en-US", {
+      year: "numeric", month: "long", day: "numeric",
+    });
+    const active = claims.filter((c) => !c.closed);
+    const highCount = active.filter((c) => c.priority === "high").length;
+    const totalExposure = active.reduce(
+      (sum, c) => sum + (typeof c.estimatedPayout === "number" ? c.estimatedPayout : 0),
+      0,
+    );
+
+    const compactClaims = active.map((c) => {
+      const missingDocs = c.documentChecklist
+        .filter((d) => d.status === "pending")
+        .map((d) => d.name);
+      return {
+        claimId: c.claimId,
+        claimantName: c.claimantName,
+        adjuster: c.adjusterAssigned,
+        stage: c.stage,
+        priority: c.priority,
+        coverageStatus: c.coverageStatus,
+        estimatedPayout: typeof c.estimatedPayout === "number" ? c.estimatedPayout : "TBD",
+        issue: c.issue || null,
+        missingDocs: missingDocs.length ? missingDocs : null,
+      };
+    });
+
     return [
       "You are a senior claims adjudication assistant for ValonOS Specialty Insurance.",
       "You support adjusters handling real claims for real people going through difficult moments.",
-      "",
       "Tone: empathetic toward claimants, professional with adjusters.",
-      "When a claim involves injury, legal exposure, or financial hardship, acknowledge the human stakes.",
-      "When giving operational guidance, be direct, specific, and action-oriented.",
-      "",
       "Always reference specific claim IDs, claimant names, dollar amounts, and dates.",
-      "Structure responses clearly — key facts first, recommended action second, risks flagged last.",
-      "If something is legally or financially sensitive, say so explicitly.",
-      "Never hedge without explaining why. Never give generic advice.",
+      "Structure responses: key facts first, recommended action second, risks flagged last.",
+      "If legally or financially sensitive, say so explicitly. Never give generic advice.",
+      "Answer only using the claims data provided below. If data is missing, say so directly.",
       "",
-      "For portfolio questions: total exposure, priority ranking, top blockers.",
-      "For individual claims: stage, blocker, next action, human context.",
-      "For financial questions: calculate from claims data, show your work briefly.",
+      `Today: ${today}`,
+      `Portfolio: ${active.length} active · ${highCount} high priority · $${totalExposure.toLocaleString()} total known exposure`,
       "",
-      "Answer only using the claim dataset provided below. If data is missing, say so directly.",
-      "",
-      `Current claims dataset JSON:\n${claimsJson}`,
+      "Active claims:",
+      JSON.stringify(compactClaims),
     ].join("\n");
   };
 
@@ -329,7 +349,7 @@ function App() {
 
     try {
       const systemPrompt = buildSystemPrompt();
-      const callArgs = { model: llmModel, systemPrompt, messages: nextMessages };
+      const callArgs = { model: llmModel, systemPrompt, messages: nextMessages.slice(-6) };
       const result = llmProvider === "openai"
         ? await callOpenAI(callArgs)
         : await callAnthropic(callArgs);
